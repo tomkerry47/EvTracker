@@ -12,11 +12,11 @@ Add these **exactly as shown** in your Vercel project:
 
 ### 1. DATABASE_URL (Required)
 
-**⚠️ CRITICAL: Format Must Be Exact - See [DATABASE_URL_FIX.md](./DATABASE_URL_FIX.md) if confused**
+**⚠️ CRITICAL: Format Must Be Exact - See [VERIFY_DATABASE_URL.md](./VERIFY_DATABASE_URL.md) for validation**
 
 ```
 Name: DATABASE_URL
-Value: postgresql://neondb_owner:npg_3gZqomRLMVh0@ep-dry-moon-abu5f8m3-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+Value: postgresql://neondb_owner:npg_3gZqomRLMVh0@ep-dry-moon-abu5f8m3-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=verify-full&channel_binding=require
 Environments: ✅ Production ✅ Preview ✅ Development
 ```
 
@@ -25,6 +25,7 @@ Environments: ✅ Production ✅ Preview ✅ Development
 - ❌ Do NOT use quotes `'...'` around the URL
 - ❌ Do NOT use `&amp;` (use plain `&` ampersand)
 - ✅ Must start with `postgresql://`
+- ✅ Use `sslmode=verify-full` (not `require`) to avoid SSL warnings
 - ✅ Copy the value above EXACTLY as shown
 
 ### 2. OCTOPUS_API_KEY (Required for Import)

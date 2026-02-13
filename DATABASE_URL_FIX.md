@@ -51,15 +51,17 @@ DATABASE_URL=psql 'postgresql://...?sslmode=require&amp;channel_binding=require'
 ### ✅ CORRECT (Fixed Format)
 
 ```
-DATABASE_URL=postgresql://neondb_owner:npg_3gZqomRLMVh0@ep-dry-moon-abu5f8m3-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+DATABASE_URL=postgresql://neondb_owner:npg_3gZqomRLMVh0@ep-dry-moon-abu5f8m3-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=verify-full&channel_binding=require
 ```
+
+**Note:** Also changed `sslmode=require` to `sslmode=verify-full` to avoid SSL security warnings.
 
 ## Copy-Paste Ready - Your Correct Value
 
 **Use this EXACT value in Vercel:**
 
 ```
-postgresql://neondb_owner:npg_3gZqomRLMVh0@ep-dry-moon-abu5f8m3-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+postgresql://neondb_owner:npg_3gZqomRLMVh0@ep-dry-moon-abu5f8m3-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=verify-full&channel_binding=require
 ```
 
 ## Why This Mistake Happens
@@ -170,18 +172,25 @@ Some people think environment variables need quotes like in shell scripts.
 
 ```
 Error connecting to database: Error: getaddrinfo ENOTFOUND base
+hostname: 'base'
 ```
 
 This error happens because the app is trying to connect to hostname "base" - which comes from parsing the malformed URL incorrectly.
 
+You may also see this SSL warning:
+```
+Warning: SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'.
+```
+
 ### After Fix (Should Work)
 
 ```
-Server listening on port 3000
-Database connected successfully
+Octopus Energy API client initialized
+Legacy server listening...
+Connected to Neon Postgres database
 ```
 
-No errors, app loads, data persists.
+No errors, app loads, data persists, no SSL warnings.
 
 ## Alternative: Get Clean URL from Neon
 
@@ -194,8 +203,9 @@ If you want to get the clean connection string from Neon:
 5. **Remove** `psql '` from the start
 6. **Remove** `'` from the end
 7. **Replace** any `&amp;` with `&`
-8. **Copy** the cleaned result
-9. **Paste** into Vercel
+8. **Change** `sslmode=require` to `sslmode=verify-full`
+9. **Copy** the cleaned result
+10. **Paste** into Vercel
 
 ## Your Correct Value (Copy This!)
 
