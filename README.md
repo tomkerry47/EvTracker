@@ -130,28 +130,33 @@ The dashboard displays:
 
 ### Andersen A3 Charger Integration
 
+**📖 Full Setup Guide**: See [ANDERSEN_API_SETUP.md](./ANDERSEN_API_SETUP.md) for comprehensive instructions.
+
 The Andersen A3 charger can be integrated in several ways:
 
 #### Option 1: Manual Logging (Current Implementation)
 - Log each charging session manually using the web interface
 - Best for users who want simple tracking without automation
+- ✅ **Works now** - No setup required
 
 #### Option 2: Andersen API Integration (Future Enhancement)
-The Andersen A3 offers an API that could be integrated:
+The Andersen A3 may offer an API that could be integrated:
 - Requires Andersen account and API credentials
 - Can automatically fetch charging session data
 - Would require additional backend development
+- ⚠️ **Not yet implemented** - See [ANDERSEN_API_SETUP.md](./ANDERSEN_API_SETUP.md)
 
-To implement API integration:
-1. Sign up for Andersen API access
-2. Add API credentials to environment variables
-3. Implement polling service to fetch new sessions
-4. Map Andersen data to EvTracker format
+**To prepare for API integration:**
+1. Contact Andersen support to check API availability
+2. Request API credentials if available
+3. Follow the guide in [ANDERSEN_API_SETUP.md](./ANDERSEN_API_SETUP.md)
+4. Add API credentials to environment variables when implementation is ready
 
 #### Option 3: OCPP Integration (Advanced)
 - Andersen A3 supports OCPP (Open Charge Point Protocol)
 - Requires OCPP server setup
 - Most complex but most powerful option
+- See [ANDERSEN_API_SETUP.md](./ANDERSEN_API_SETUP.md) for details
 
 ### Octopus Energy Integration
 
