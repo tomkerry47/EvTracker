@@ -215,6 +215,24 @@ See `migrations/add-octopus-columns.sql` for the full migration.
 
 ---
 
+## Migrations
+
+If you created your table before certain features were added, you may need to run migrations:
+
+### Add Time Columns (For Octopus Import)
+
+If you get an error about missing `start_time` or `end_time` columns:
+
+```sql
+ALTER TABLE charging_sessions 
+ADD COLUMN IF NOT EXISTS start_time TIME;
+
+ALTER TABLE charging_sessions 
+ADD COLUMN IF NOT EXISTS end_time TIME;
+```
+
+See `migrations/add-time-columns.sql` for details or [FIX_OCTOPUS_IMPORT_ERROR.md](./FIX_OCTOPUS_IMPORT_ERROR.md) for full guide.
+
 ## Next Steps
 
 After creating the table:

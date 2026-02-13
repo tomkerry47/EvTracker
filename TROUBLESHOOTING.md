@@ -316,4 +316,47 @@ And your app should:
 
 ---
 
+## Error: column "start_time" does not exist
+
+### Error Message
+```
+Error importing sessions from Octopus: 
+error: column "start_time" of relation "charging_sessions" does not exist
+PostgreSQL error code: 42703
+```
+
+### What This Means
+- Your database table is missing the `start_time` and `end_time` columns
+- These columns are required for the Octopus Energy import feature
+- This happens if you created the table with an older schema version
+
+### Solution
+Run this migration in Neon SQL Editor:
+
+```sql
+ALTER TABLE charging_sessions 
+ADD COLUMN IF NOT EXISTS start_time TIME;
+
+ALTER TABLE charging_sessions 
+ADD COLUMN IF NOT EXISTS end_time TIME;
+```
+
+Takes 10 seconds - just paste and run!
+
+### Verification
+After running the migration, check your table:
+
+```sql
+SELECT column_name, data_type 
+FROM information_schema.columns 
+WHERE table_name = 'charging_sessions';
+```
+
+You should see `start_time` and `end_time` listed.
+
+### Detailed Guide
+See [FIX_OCTOPUS_IMPORT_ERROR.md](./FIX_OCTOPUS_IMPORT_ERROR.md) for complete instructions.
+
+---
+
 **Last Updated:** 2026-02-13
