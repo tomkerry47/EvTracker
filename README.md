@@ -82,14 +82,17 @@ http://localhost:3000
 
 See the detailed [DEPLOYMENT.md](./DEPLOYMENT.md) guide for step-by-step instructions.
 
+**Environment Variables:** See [VERCEL_SETUP.md](./VERCEL_SETUP.md) for what to configure in Vercel.
+
 **Quick Deploy:**
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/tomkerry47/EvTracker)
 
 1. Click the button above or go to [Vercel Dashboard](https://vercel.com/new)
 2. Import your repository
-3. Add environment variable:
-   - `DATABASE_URL` (your Neon Postgres connection string)
+3. **Add environment variable** ([See VERCEL_SETUP.md](./VERCEL_SETUP.md)):
+   - **Key**: `DATABASE_URL`
+   - **Value**: Your Neon Postgres connection string
 4. Deploy!
 
 Your app will be live at `https://your-project.vercel.app`
