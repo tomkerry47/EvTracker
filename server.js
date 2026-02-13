@@ -64,8 +64,10 @@ app.get('/api/sessions/:id', (req, res) => {
 app.post('/api/sessions', (req, res) => {
   try {
     const sessions = readSessions();
+    // Generate unique ID using timestamp + random suffix to prevent collisions
+    const id = Date.now().toString() + '-' + Math.random().toString(36).substr(2, 9);
     const newSession = {
-      id: Date.now().toString(),
+      id,
       ...req.body,
       createdAt: new Date().toISOString()
     };

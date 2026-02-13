@@ -213,7 +213,9 @@ function calculateDuration(startTime, endTime) {
 
 // Helper: Format date nicely
 function formatDate(dateString) {
-    const date = new Date(dateString + 'T00:00:00');
+    // Parse date in local timezone to avoid timezone shift issues
+    const [year, month, day] = dateString.split('-');
+    const date = new Date(year, month - 1, day);
     const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
     return date.toLocaleDateString('en-GB', options);
 }
