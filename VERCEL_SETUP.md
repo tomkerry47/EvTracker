@@ -1,5 +1,14 @@
 # Vercel Environment Variables Setup
 
+## ⚠️ Important: Fixed Deployment Error
+
+**Previously**, the `vercel.json` file contained a reference to a non-existent secret that caused deployment failures:
+```
+Environment Variable "DATABASE_URL" references Secret "database-url", which does not exist.
+```
+
+**This has been fixed!** The secret reference has been removed from `vercel.json`. You now need to add the environment variable directly in Vercel's dashboard or CLI.
+
 ## Required Environment Variable
 
 When creating or deploying your EvTracker project on Vercel, you need to add **ONE** environment variable:
