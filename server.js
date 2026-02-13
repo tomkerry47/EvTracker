@@ -1,20 +1,33 @@
 require('dotenv').config();
 const express = require('express');
-const { createClient } = require('@supabase/supabase-js');
+const { Pool } = require('pg');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Initialize Supabase client
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
+// Initialize PostgreSQL connection pool
+const databaseUrl = process.env.DATABASE_URL;
 
-if (!supabaseUrl || !supabaseKey) {
-  console.error('ERROR: Missing Supabase credentials. Please set SUPABASE_URL and SUPABASE_ANON_KEY in your .env file.');
+if (!databaseUrl) {
+  console.error('ERROR: Missing database connection string. Please set DATABASE_URL in your .env file.');
   process.exit(1);
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+const pool = new Pool({
+  connectionString: databaseUrl,
+  ssl: {
+    rejectUnauthorized: false
+  }
+});
+
+// Test database connection
+pool.query('SELECT NOW()', (err, res) => {
+  if (err) {
+    console.error('Error connecting to database:', err);
+    process.exit(1);
+  }
+  console.log('Connected to Neon Postgres database');
+});
 
 // Middleware
 app.use(express.json());
@@ -25,15 +38,12 @@ app.use(express.static('public'));
 // Get all charging sessions
 app.get('/api/sessions', async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('charging_sessions')
-      .select('*')
-      .order('created_at', { ascending: false });
-    
-    if (error) throw error;
+    const result = await pool.query(
+      'SELECT * FROM charging_sessions ORDER BY created_at DESC'
+    );
     
     // Transform data to match frontend expectations (camelCase)
-    const sessions = data.map(session => ({
+    const sessions = result.rows.map(session => ({
       id: session.id,
       date: session.date,
       startTime: session.start_time,
@@ -57,18 +67,16 @@ app.get('/api/sessions', async (req, res) => {
 // Get a specific session
 app.get('/api/sessions/:id', async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('charging_sessions')
-      .select('*')
-      .eq('id', req.params.id)
-      .single();
+    const result = await pool.query(
+      'SELECT * FROM charging_sessions WHERE id = $1',
+      [req.params.id]
+    );
     
-    if (error) {
-      if (error.code === 'PGRST116') {
-        return res.status(404).json({ error: 'Session not found' });
-      }
-      throw error;
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Session not found' });
     }
+    
+    const data = result.rows[0];
     
     // Transform data to match frontend expectations (camelCase)
     const session = {
@@ -98,27 +106,26 @@ app.post('/api/sessions', async (req, res) => {
     // Generate unique ID using timestamp + random suffix to prevent collisions
     const id = Date.now().toString() + '-' + Math.random().toString(36).substr(2, 9);
     
-    // Transform camelCase to snake_case for database
-    const sessionData = {
-      id,
-      date: req.body.date,
-      start_time: req.body.startTime,
-      end_time: req.body.endTime,
-      energy_added: req.body.energyAdded,
-      start_soc: req.body.startSoC || null,
-      end_soc: req.body.endSoC || null,
-      tariff_rate: req.body.tariffRate,
-      cost: req.body.cost,
-      notes: req.body.notes || null
-    };
+    const result = await pool.query(
+      `INSERT INTO charging_sessions 
+        (id, date, start_time, end_time, energy_added, start_soc, end_soc, tariff_rate, cost, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING *`,
+      [
+        id,
+        req.body.date,
+        req.body.startTime,
+        req.body.endTime,
+        req.body.energyAdded,
+        req.body.startSoC || null,
+        req.body.endSoC || null,
+        req.body.tariffRate,
+        req.body.cost,
+        req.body.notes || null
+      ]
+    );
     
-    const { data, error } = await supabase
-      .from('charging_sessions')
-      .insert([sessionData])
-      .select()
-      .single();
-    
-    if (error) throw error;
+    const data = result.rows[0];
     
     // Transform response back to camelCase
     const newSession = {
@@ -145,31 +152,67 @@ app.post('/api/sessions', async (req, res) => {
 // Update a charging session
 app.put('/api/sessions/:id', async (req, res) => {
   try {
-    // Transform camelCase to snake_case for database
-    const updateData = {};
-    if (req.body.date !== undefined) updateData.date = req.body.date;
-    if (req.body.startTime !== undefined) updateData.start_time = req.body.startTime;
-    if (req.body.endTime !== undefined) updateData.end_time = req.body.endTime;
-    if (req.body.energyAdded !== undefined) updateData.energy_added = req.body.energyAdded;
-    if (req.body.startSoC !== undefined) updateData.start_soc = req.body.startSoC;
-    if (req.body.endSoC !== undefined) updateData.end_soc = req.body.endSoC;
-    if (req.body.tariffRate !== undefined) updateData.tariff_rate = req.body.tariffRate;
-    if (req.body.cost !== undefined) updateData.cost = req.body.cost;
-    if (req.body.notes !== undefined) updateData.notes = req.body.notes;
+    // Build dynamic update query
+    const updates = [];
+    const values = [];
+    let paramCount = 1;
     
-    const { data, error } = await supabase
-      .from('charging_sessions')
-      .update(updateData)
-      .eq('id', req.params.id)
-      .select()
-      .single();
-    
-    if (error) {
-      if (error.code === 'PGRST116') {
-        return res.status(404).json({ error: 'Session not found' });
-      }
-      throw error;
+    if (req.body.date !== undefined) {
+      updates.push(`date = $${paramCount++}`);
+      values.push(req.body.date);
     }
+    if (req.body.startTime !== undefined) {
+      updates.push(`start_time = $${paramCount++}`);
+      values.push(req.body.startTime);
+    }
+    if (req.body.endTime !== undefined) {
+      updates.push(`end_time = $${paramCount++}`);
+      values.push(req.body.endTime);
+    }
+    if (req.body.energyAdded !== undefined) {
+      updates.push(`energy_added = $${paramCount++}`);
+      values.push(req.body.energyAdded);
+    }
+    if (req.body.startSoC !== undefined) {
+      updates.push(`start_soc = $${paramCount++}`);
+      values.push(req.body.startSoC);
+    }
+    if (req.body.endSoC !== undefined) {
+      updates.push(`end_soc = $${paramCount++}`);
+      values.push(req.body.endSoC);
+    }
+    if (req.body.tariffRate !== undefined) {
+      updates.push(`tariff_rate = $${paramCount++}`);
+      values.push(req.body.tariffRate);
+    }
+    if (req.body.cost !== undefined) {
+      updates.push(`cost = $${paramCount++}`);
+      values.push(req.body.cost);
+    }
+    if (req.body.notes !== undefined) {
+      updates.push(`notes = $${paramCount++}`);
+      values.push(req.body.notes);
+    }
+    
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+    
+    values.push(req.params.id);
+    
+    const result = await pool.query(
+      `UPDATE charging_sessions 
+       SET ${updates.join(', ')}
+       WHERE id = $${paramCount}
+       RETURNING *`,
+      values
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    const data = result.rows[0];
     
     // Transform response back to camelCase
     const session = {
@@ -196,15 +239,12 @@ app.put('/api/sessions/:id', async (req, res) => {
 // Delete a charging session
 app.delete('/api/sessions/:id', async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('charging_sessions')
-      .delete()
-      .eq('id', req.params.id)
-      .select();
+    const result = await pool.query(
+      'DELETE FROM charging_sessions WHERE id = $1 RETURNING *',
+      [req.params.id]
+    );
     
-    if (error) throw error;
-    
-    if (!data || data.length === 0) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Session not found' });
     }
     
@@ -218,11 +258,11 @@ app.delete('/api/sessions/:id', async (req, res) => {
 // Get statistics
 app.get('/api/stats', async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('charging_sessions')
-      .select('energy_added, cost');
+    const result = await pool.query(
+      'SELECT energy_added, cost FROM charging_sessions'
+    );
     
-    if (error) throw error;
+    const data = result.rows;
     
     const stats = {
       totalSessions: data.length,
@@ -242,5 +282,5 @@ app.get('/api/stats', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`EvTracker server running on http://localhost:${PORT}`);
-  console.log(`Connected to Supabase at ${supabaseUrl}`);
+  console.log(`Connected to Neon Postgres database`);
 });
