@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const { Pool } = require('pg');
+const OctopusEnergyClient = require('./lib/octopus-client');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -29,6 +30,19 @@ pool.query('SELECT NOW()', (err, res) => {
   console.log('Connected to Neon Postgres database');
 });
 
+// Initialize Octopus Energy client if credentials are available
+let octopusClient = null;
+if (process.env.OCTOPUS_API_KEY && process.env.OCTOPUS_MPAN && process.env.OCTOPUS_SERIAL) {
+  octopusClient = new OctopusEnergyClient(
+    process.env.OCTOPUS_API_KEY,
+    process.env.OCTOPUS_MPAN,
+    process.env.OCTOPUS_SERIAL
+  );
+  console.log('Octopus Energy API client initialized');
+} else {
+  console.log('Octopus Energy API credentials not found - import functionality disabled');
+}
+
 // Middleware
 app.use(express.json());
 app.use(express.static('public'));
@@ -54,6 +68,7 @@ app.get('/api/sessions', async (req, res) => {
       tariffRate: parseFloat(session.tariff_rate),
       cost: parseFloat(session.cost),
       notes: session.notes,
+      source: session.source || 'manual',
       createdAt: session.created_at
     }));
     
@@ -90,6 +105,7 @@ app.get('/api/sessions/:id', async (req, res) => {
       tariffRate: parseFloat(data.tariff_rate),
       cost: parseFloat(data.cost),
       notes: data.notes,
+      source: data.source || 'manual',
       createdAt: data.created_at
     };
     
@@ -108,8 +124,8 @@ app.post('/api/sessions', async (req, res) => {
     
     const result = await pool.query(
       `INSERT INTO charging_sessions 
-        (id, date, start_time, end_time, energy_added, start_soc, end_soc, tariff_rate, cost, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        (id, date, start_time, end_time, energy_added, start_soc, end_soc, tariff_rate, cost, notes, source, octopus_session_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING *`,
       [
         id,
@@ -121,7 +137,9 @@ app.post('/api/sessions', async (req, res) => {
         req.body.endSoC || null,
         req.body.tariffRate,
         req.body.cost,
-        req.body.notes || null
+        req.body.notes || null,
+        req.body.source || 'manual',
+        req.body.octopusSessionId || null
       ]
     );
     
@@ -139,12 +157,17 @@ app.post('/api/sessions', async (req, res) => {
       tariffRate: parseFloat(data.tariff_rate),
       cost: parseFloat(data.cost),
       notes: data.notes,
+      source: data.source || 'manual',
       createdAt: data.created_at
     };
     
     res.status(201).json(newSession);
   } catch (error) {
     console.error('Error creating session:', error);
+    // Handle unique constraint violation for duplicate octopus sessions
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'Session already imported' });
+    }
     res.status(500).json({ error: 'Failed to create session' });
   }
 });
@@ -253,6 +276,108 @@ app.delete('/api/sessions/:id', async (req, res) => {
     console.error('Error deleting session:', error);
     res.status(500).json({ error: 'Failed to delete session' });
   }
+});
+
+// Octopus Energy API Routes
+
+// Import charging sessions from Octopus Energy API
+app.post('/api/octopus/import', async (req, res) => {
+  try {
+    if (!octopusClient) {
+      return res.status(503).json({ 
+        error: 'Octopus Energy API not configured. Please set OCTOPUS_API_KEY, OCTOPUS_MPAN, and OCTOPUS_SERIAL environment variables.' 
+      });
+    }
+
+    const { dateFrom, dateTo, threshold, tariffRate } = req.body;
+    
+    // Validate inputs
+    if (!dateFrom || !dateTo) {
+      return res.status(400).json({ error: 'dateFrom and dateTo are required' });
+    }
+
+    // Import sessions from Octopus
+    const sessions = await octopusClient.importSessions(
+      dateFrom, 
+      dateTo, 
+      threshold || 2.0, 
+      tariffRate || 7.5
+    );
+
+    // Insert sessions into database
+    const importedSessions = [];
+    const skippedSessions = [];
+
+    for (const session of sessions) {
+      try {
+        const id = Date.now().toString() + '-' + Math.random().toString(36).substr(2, 9);
+        
+        const result = await pool.query(
+          `INSERT INTO charging_sessions 
+            (id, date, start_time, end_time, energy_added, start_soc, end_soc, tariff_rate, cost, notes, source, octopus_session_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+           RETURNING *`,
+          [
+            id,
+            session.date,
+            session.startTime,
+            session.endTime,
+            session.energyAdded,
+            session.startSoC,
+            session.endSoC,
+            session.tariffRate,
+            session.cost,
+            session.notes,
+            session.source,
+            session.octopusSessionId
+          ]
+        );
+
+        const data = result.rows[0];
+        importedSessions.push({
+          id: data.id,
+          date: data.date,
+          startTime: data.start_time,
+          endTime: data.end_time,
+          energyAdded: parseFloat(data.energy_added),
+          startSoC: data.start_soc,
+          endSoC: data.end_soc,
+          tariffRate: parseFloat(data.tariff_rate),
+          cost: parseFloat(data.cost),
+          notes: data.notes,
+          source: data.source,
+          createdAt: data.created_at
+        });
+      } catch (error) {
+        // Handle duplicate sessions
+        if (error.code === '23505') {
+          skippedSessions.push(session);
+        } else {
+          throw error;
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      imported: importedSessions.length,
+      skipped: skippedSessions.length,
+      sessions: importedSessions
+    });
+  } catch (error) {
+    console.error('Error importing sessions from Octopus:', error);
+    res.status(500).json({ error: error.message || 'Failed to import sessions from Octopus Energy API' });
+  }
+});
+
+// Check if Octopus API is configured
+app.get('/api/octopus/status', (req, res) => {
+  res.json({
+    configured: octopusClient !== null,
+    apiKey: process.env.OCTOPUS_API_KEY ? '✓ Set' : '✗ Not set',
+    mpan: process.env.OCTOPUS_MPAN ? '✓ Set' : '✗ Not set',
+    serial: process.env.OCTOPUS_SERIAL ? '✓ Set' : '✗ Not set'
+  });
 });
 
 // Get statistics

@@ -84,6 +84,36 @@
             </form>
         </div>
 
+        <!-- Octopus Energy Import Section -->
+        <div class="import-section">
+            <h2>🐙 Import from Octopus Energy</h2>
+            <p class="import-description">Automatically detect charging sessions from your smart meter data</p>
+            <div class="import-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="importDateFrom">From Date</label>
+                        <input type="date" id="importDateFrom" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="importDateTo">To Date</label>
+                        <input type="date" id="importDateTo" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="importThreshold">Detection Threshold (kWh)</label>
+                        <input type="number" id="importThreshold" step="0.1" min="0.5" value="2.0" required>
+                        <small>Minimum kWh per 30min to detect charging</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="importTariffRate">Tariff Rate (p/kWh)</label>
+                        <input type="number" id="importTariffRate" step="0.01" min="0" value="7.5" required>
+                        <small>Intelligent Go off-peak rate</small>
+                    </div>
+                </div>
+                <button id="importButton" class="btn btn-import">Import Sessions</button>
+                <div id="importStatus" class="import-status"></div>
+            </div>
+        </div>
+
         <!-- Sessions History -->
         <div class="sessions-section">
             <h2>Charging History</h2>

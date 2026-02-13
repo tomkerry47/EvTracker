@@ -8,12 +8,19 @@ document.addEventListener('DOMContentLoaded', () => {
     setupForm();
     setDefaultDate();
     setupCostCalculation();
+    setupImportForm();
 });
 
 // Set default date to today
 function setDefaultDate() {
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('date').value = today;
+    
+    // Set default import dates (last 7 days)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    document.getElementById('importDateFrom').value = sevenDaysAgo.toISOString().split('T')[0];
+    document.getElementById('importDateTo').value = today;
 }
 
 // Setup automatic cost calculation
@@ -101,12 +108,16 @@ function createSessionCard(session) {
         ? `${session.startSoC}% → ${session.endSoC}%` 
         : 'N/A';
     
+    const source = session.source || 'manual';
+    const sourceBadge = `<span class="session-source ${source}">${source === 'octopus' ? '🐙 Octopus' : '👤 Manual'}</span>`;
+    
     return `
         <div class="session-card">
             <div class="session-header">
                 <div class="session-date">
                     ${formatDate(session.date)} 
                     <span style="color: #888; font-size: 0.8em;">${session.startTime} - ${session.endTime}</span>
+                    ${sourceBadge}
                 </div>
                 <button class="btn btn-danger delete-btn" data-id="${session.id}">Delete</button>
             </div>
@@ -218,4 +229,80 @@ function formatDate(dateString) {
     const date = new Date(year, month - 1, day);
     const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
     return date.toLocaleDateString('en-GB', options);
+}
+
+// Setup import form
+function setupImportForm() {
+    const importButton = document.getElementById('importButton');
+    importButton.addEventListener('click', importFromOctopus);
+}
+
+// Import sessions from Octopus Energy
+async function importFromOctopus() {
+    const dateFrom = document.getElementById('importDateFrom').value;
+    const dateTo = document.getElementById('importDateTo').value;
+    const threshold = parseFloat(document.getElementById('importThreshold').value);
+    const tariffRate = parseFloat(document.getElementById('importTariffRate').value);
+    const statusDiv = document.getElementById('importStatus');
+    const importButton = document.getElementById('importButton');
+    
+    if (!dateFrom || !dateTo) {
+        showImportStatus('Please select both from and to dates', 'error');
+        return;
+    }
+    
+    // Disable button and show loading
+    importButton.disabled = true;
+    importButton.textContent = 'Importing...';
+    showImportStatus('Fetching data from Octopus Energy API...', 'info');
+    
+    try {
+        const response = await fetch(`${API_URL}/octopus/import`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                dateFrom,
+                dateTo,
+                threshold,
+                tariffRate
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            const message = `Successfully imported ${data.imported} session(s)${data.skipped > 0 ? ` (${data.skipped} duplicate(s) skipped)` : ''}`;
+            showImportStatus(message, 'success');
+            
+            // Reload sessions and stats
+            await loadSessions();
+            await loadStats();
+        } else {
+            throw new Error(data.error || 'Import failed');
+        }
+    } catch (error) {
+        console.error('Error importing from Octopus:', error);
+        showImportStatus(`Import failed: ${error.message}`, 'error');
+    } finally {
+        // Re-enable button
+        importButton.disabled = false;
+        importButton.textContent = 'Import Sessions';
+    }
+}
+
+// Show import status message
+function showImportStatus(message, type) {
+    const statusDiv = document.getElementById('importStatus');
+    statusDiv.textContent = message;
+    statusDiv.className = `import-status ${type}`;
+    statusDiv.style.display = 'block';
+    
+    // Auto-hide success messages after 5 seconds
+    if (type === 'success') {
+        setTimeout(() => {
+            statusDiv.style.display = 'none';
+        }, 5000);
+    }
 }
