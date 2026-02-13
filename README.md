@@ -1,10 +1,16 @@
 # ⚡ EvTracker
 
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/tomkerry47/EvTracker)
+
 A web application for tracking electric vehicle charging sessions, specifically designed for Andersen A3 charger users on the Octopus Energy Intelligent Go tariff.
 
 **Backend:** Supabase (PostgreSQL)  
 **Frontend:** Vercel-ready static site  
 **API:** Express.js serverless functions
+
+## 🚀 Quick Start
+
+**Ready to deploy?** See [QUICKSTART.md](./QUICKSTART.md) for a 10-minute setup guide!
 
 ## Features
 
