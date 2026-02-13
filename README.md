@@ -4,7 +4,7 @@
 
 A web application for tracking electric vehicle charging sessions, specifically designed for Andersen A3 charger users on the Octopus Energy Intelligent Go tariff.
 
-**Backend:** Supabase (PostgreSQL)  
+**Backend:** Neon Postgres  
 **Frontend:** Vercel-ready static site  
 **API:** Express.js serverless functions
 
@@ -20,11 +20,11 @@ A web application for tracking electric vehicle charging sessions, specifically 
 - 💰 **Cost tracking** with customizable tariff rates
 - 🔋 **State of Charge (SoC)** tracking
 - 📱 **Responsive design** for desktop and mobile
-- ☁️ **Cloud-native** with Supabase backend and Vercel hosting
+- ☁️ **Cloud-native** with Neon Postgres backend and Vercel hosting
 
 ## Architecture
 
-- **Backend**: Supabase PostgreSQL database with Row Level Security
+- **Backend**: Neon Postgres database (serverless PostgreSQL)
 - **API**: Express.js serverless functions (Vercel compatible)
 - **Frontend**: Vanilla HTML/CSS/JavaScript (no build step required)
 - **Hosting**: Designed for Vercel deployment
@@ -35,7 +35,7 @@ A web application for tracking electric vehicle charging sessions, specifically 
 
 - Node.js (v14 or higher)
 - npm (comes with Node.js)
-- A [Supabase](https://supabase.com/) account
+- A [Neon](https://neon.tech/) Postgres database
 - A [Vercel](https://vercel.com/) account (for deployment)
 
 ### Local Development Setup
@@ -51,19 +51,18 @@ cd EvTracker
 npm install
 ```
 
-3. Set up Supabase:
-   - Create a new project at [supabase.com](https://supabase.com/)
-   - Go to SQL Editor and run the schema from `supabase-schema.sql`
-   - Get your project URL and anon key from Settings > API
+3. Set up Neon Postgres:
+   - Create a new project at [neon.tech](https://neon.tech/)
+   - Copy your connection string from the Neon dashboard
+   - Run the schema from `neon-schema.sql` in the Neon SQL Editor
 
 4. Configure environment variables:
 ```bash
 cp .env.example .env
 ```
-Edit `.env` and add your Supabase credentials:
+Edit `.env` and add your Neon connection string:
 ```env
-SUPABASE_URL=https://your-project-id.supabase.co
-SUPABASE_ANON_KEY=your-anon-key-here
+DATABASE_URL=postgresql://user:password@host.neon.tech/dbname?sslmode=require
 PORT=3000
 ```
 
@@ -89,9 +88,8 @@ See the detailed [DEPLOYMENT.md](./DEPLOYMENT.md) guide for step-by-step instruc
 
 1. Click the button above or go to [Vercel Dashboard](https://vercel.com/new)
 2. Import your repository
-3. Add environment variables:
-   - `SUPABASE_URL`
-   - `SUPABASE_ANON_KEY`
+3. Add environment variable:
+   - `DATABASE_URL` (your Neon Postgres connection string)
 4. Deploy!
 
 Your app will be live at `https://your-project.vercel.app`
@@ -179,13 +177,13 @@ To implement API integration:
 
 ## Data Storage
 
-- **Database**: Supabase PostgreSQL database
+- **Database**: Neon Postgres (serverless PostgreSQL)
 - **Table**: `charging_sessions` with proper indexes for performance
-- **Security**: Row Level Security (RLS) policies for data protection
-- **Backups**: Automatic backups via Supabase (configurable)
-- **Scalability**: Cloud-native, scales automatically with usage
+- **Security**: Standard PostgreSQL security practices
+- **Backups**: Automatic backups via Neon (configurable)
+- **Scalability**: Serverless, scales automatically with usage
 
-See `supabase-schema.sql` for the complete database schema.
+See `neon-schema.sql` for the complete database schema.
 
 ## Configuration
 
@@ -194,8 +192,7 @@ See `supabase-schema.sql` for the complete database schema.
 Required environment variables (set in `.env` for local, Vercel settings for production):
 
 ```env
-SUPABASE_URL=https://your-project-id.supabase.co
-SUPABASE_ANON_KEY=your-anon-key-here
+DATABASE_URL=postgresql://user:password@host.neon.tech/dbname?sslmode=require
 PORT=3000  # Optional, for local development
 ```
 
@@ -282,7 +279,7 @@ EvTracker/
 ├── server.js              # Express API server (Vercel serverless ready)
 ├── package.json           # Dependencies and scripts
 ├── vercel.json            # Vercel deployment configuration
-├── supabase-schema.sql    # Database schema for Supabase
+├── neon-schema.sql        # Database schema for Neon Postgres
 ├── DEPLOYMENT.md          # Detailed deployment guide
 ├── .env.example           # Environment variables template
 └── public/                # Static frontend files
@@ -294,8 +291,8 @@ EvTracker/
 ### Technology Stack
 
 - **Backend Framework**: Express.js
-- **Database**: Supabase (PostgreSQL)
-- **Database Client**: @supabase/supabase-js
+- **Database**: Neon Postgres (serverless PostgreSQL)
+- **Database Client**: pg (node-postgres)
 - **Frontend**: Vanilla HTML/CSS/JavaScript
 - **Hosting**: Vercel (serverless functions)
 - **Environment**: dotenv for local development
@@ -312,33 +309,33 @@ EvTracker/
    - Add styles to `styles.css`
    - Modify logic in `app.js`
 
-3. **Database changes**: Update `supabase-schema.sql`
+3. **Database changes**: Update `neon-schema.sql`
    - Add new tables or columns
    - Create indexes
-   - Update RLS policies
 
 4. **Deploy**: Push to Git (auto-deploys on Vercel)
 
 ## Troubleshooting
 
 ### Server won't start
-- **Missing credentials**: Check that `SUPABASE_URL` and `SUPABASE_ANON_KEY` are set in `.env`
+- **Missing credentials**: Check that `DATABASE_URL` is set in `.env`
 - **Port in use**: Try a different port: `PORT=8080 npm start`
 - **Dependencies**: Run `npm install` to ensure all packages are installed
 
 ### Database connection errors
-- **Invalid credentials**: Verify Supabase URL and anon key are correct
-- **Table doesn't exist**: Run the SQL schema from `supabase-schema.sql` in Supabase SQL Editor
-- **Network issues**: Check your internet connection and Supabase project status
+- **Invalid connection string**: Verify your Neon connection string is correct
+- **Table doesn't exist**: Run the SQL schema from `neon-schema.sql` in Neon SQL Editor
+- **Network issues**: Check your internet connection and Neon project status
+- **SSL issues**: Ensure your connection string includes `?sslmode=require`
 
 ### Sessions not saving
-- **Database permissions**: Verify RLS policies in Supabase allow inserts
+- **Database permissions**: Verify database user has write permissions
 - **Invalid data**: Check browser console for validation errors
 - **API errors**: Check server logs for error messages
 
 ### Deployment issues on Vercel
 - **Build fails**: Ensure all dependencies are in `package.json`
-- **Environment variables**: Set `SUPABASE_URL` and `SUPABASE_ANON_KEY` in Vercel project settings
+- **Environment variables**: Set `DATABASE_URL` in Vercel project settings
 - **Function timeout**: Check Vercel function logs for errors
 - **Routes not working**: Verify `vercel.json` configuration is correct
 
@@ -346,14 +343,14 @@ EvTracker/
 - Check Vercel function logs in deployment dashboard
 - Verify environment variables are set correctly
 - Ensure database table schema matches the code
-- Check Supabase project status and database connection
+- Check Neon project status and database connection
 
 ## Migration from File-based Storage
 
 If you're migrating from the previous file-based version:
 
 1. Export your existing data from `data/sessions.json`
-2. Set up Supabase and run the schema
+2. Set up Neon Postgres and run the schema
 3. Import data via SQL:
 
 ```sql

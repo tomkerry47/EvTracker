@@ -1,35 +1,35 @@
 # Quick Setup Guide
 
-This guide will help you get EvTracker running with Supabase and deploy it to Vercel in under 10 minutes.
+This guide will help you get EvTracker running with Neon Postgres and deploy it to Vercel in under 10 minutes.
 
-## Step 1: Set Up Supabase (5 minutes)
+## Step 1: Set Up Neon Postgres (5 minutes)
 
 1. **Create Account & Project**
-   - Go to [supabase.com](https://supabase.com)
+   - Go to [neon.tech](https://neon.tech)
    - Sign up or log in
-   - Click "New Project"
+   - Click "Create Project"
    - Fill in:
      - Name: `evtracker`
-     - Database Password: (choose a strong password)
      - Region: (closest to you)
-   - Click "Create new project"
-   - Wait 2-3 minutes for setup
+     - Postgres Version: (use default)
+   - Click "Create Project"
+   - Wait ~30 seconds for setup
 
 2. **Create Database Table**
-   - Click "SQL Editor" in the left sidebar
-   - Click "New Query"
-   - Copy and paste the entire contents of `supabase-schema.sql`
-   - Click "Run" (or press Ctrl+Enter)
-   - You should see "Success. No rows returned"
+   - In your Neon project dashboard, click "SQL Editor"
+   - Copy and paste the entire contents of `neon-schema.sql`
+   - Click "Run" or press Ctrl+Enter
+   - You should see "Success" message
 
-3. **Get Your Credentials**
-   - Click "Settings" (gear icon) in the sidebar
-   - Click "API"
-   - Copy these two values:
-     - **Project URL** (looks like `https://xxxxx.supabase.co`)
-     - **anon public** key (the long string under "Project API keys")
+3. **Get Your Connection String**
+   - In the Neon dashboard, click "Connection Details"
+   - Copy the connection string (it looks like):
+     ```
+     postgresql://user:password@host.neon.tech/dbname?sslmode=require
+     ```
+   - Keep this handy for the next step
 
-✅ Supabase is ready!
+✅ Neon Postgres is ready!
 
 ## Step 2: Deploy to Vercel (3 minutes)
 
@@ -50,9 +50,9 @@ This guide will help you get EvTracker running with Supabase and deploy it to Ve
 3. **Configure Environment Variables**
    - Vercel will show a configuration screen
    - Expand "Environment Variables"
-   - Add two variables:
-     - Key: `SUPABASE_URL`, Value: (paste your Supabase URL)
-     - Key: `SUPABASE_ANON_KEY`, Value: (paste your anon key)
+   - Add one variable:
+     - Key: `DATABASE_URL`
+     - Value: (paste your Neon connection string)
 
 4. **Deploy**
    - Click "Deploy"
@@ -71,9 +71,8 @@ vercel login
 # Deploy (will prompt for environment variables)
 vercel
 
-# Add environment variables when prompted:
-# SUPABASE_URL: https://xxxxx.supabase.co
-# SUPABASE_ANON_KEY: your-anon-key
+# Add environment variable when prompted:
+# DATABASE_URL: postgresql://user:password@host.neon.tech/dbname?sslmode=require
 
 # Deploy to production
 vercel --prod
@@ -104,14 +103,16 @@ vercel --prod
 
 ### Common Issues
 
-**"Missing Supabase credentials" error**
-- Check that you added environment variables in Vercel
-- Redeploy after adding variables
+**"Missing database connection" error**
+- Check that you added DATABASE_URL in Vercel
+- Redeploy after adding the variable
+- Verify the connection string format is correct
 
 **Sessions not appearing**
 - Check browser console for errors
 - Verify database table was created (run schema again)
-- Check Supabase logs in dashboard
+- Check Neon logs in dashboard
+- Ensure connection string includes `?sslmode=require`
 
 **Can't deploy to Vercel**
 - Make sure you pushed all files to GitHub
