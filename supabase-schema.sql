@@ -25,15 +25,38 @@ CREATE INDEX IF NOT EXISTS idx_charging_sessions_created_at ON charging_sessions
 -- Enable Row Level Security (RLS)
 ALTER TABLE charging_sessions ENABLE ROW LEVEL SECURITY;
 
--- Create a policy that allows all operations for now
--- You can customize this based on your authentication needs
-CREATE POLICY "Enable all operations for all users" ON charging_sessions
+-- ⚠️  WARNING: INSECURE DEFAULT POLICY ⚠️
+-- This policy allows unrestricted access for development/demo purposes.
+-- **IMPORTANT**: Before going to production, you MUST:
+--   1. Enable authentication in Supabase
+--   2. Add a user_id column to track ownership
+--   3. Replace this policy with proper user-scoped policies
+--
+-- Create a permissive policy for initial setup (DEVELOPMENT ONLY)
+CREATE POLICY "Allow all operations for development" ON charging_sessions
   FOR ALL
   USING (true)
   WITH CHECK (true);
 
--- Note: For production, you should implement proper authentication
--- and create policies like:
--- CREATE POLICY "Users can only access their own sessions" ON charging_sessions
---   FOR ALL
---   USING (auth.uid() = user_id);
+-- ========================================================================
+-- PRODUCTION SECURITY SETUP (uncomment and modify after enabling auth)
+-- ========================================================================
+--
+-- Step 1: Add user_id column to track ownership
+-- ALTER TABLE charging_sessions ADD COLUMN user_id UUID REFERENCES auth.users(id);
+--
+-- Step 2: Remove the development policy
+-- DROP POLICY IF EXISTS "Allow all operations for development" ON charging_sessions;
+--
+-- Step 3: Create secure policies for authenticated users
+-- CREATE POLICY "Users can view their own sessions" ON charging_sessions
+--   FOR SELECT USING (auth.uid() = user_id);
+--
+-- CREATE POLICY "Users can insert their own sessions" ON charging_sessions
+--   FOR INSERT WITH CHECK (auth.uid() = user_id);
+--
+-- CREATE POLICY "Users can update their own sessions" ON charging_sessions
+--   FOR UPDATE USING (auth.uid() = user_id);
+--
+-- CREATE POLICY "Users can delete their own sessions" ON charging_sessions
+--   FOR DELETE USING (auth.uid() = user_id);

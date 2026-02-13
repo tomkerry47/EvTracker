@@ -196,12 +196,17 @@ app.put('/api/sessions/:id', async (req, res) => {
 // Delete a charging session
 app.delete('/api/sessions/:id', async (req, res) => {
   try {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('charging_sessions')
       .delete()
-      .eq('id', req.params.id);
+      .eq('id', req.params.id)
+      .select();
     
     if (error) throw error;
+    
+    if (!data || data.length === 0) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
     
     res.json({ message: 'Session deleted' });
   } catch (error) {
