@@ -4,6 +4,8 @@
 
 A web application for tracking electric vehicle charging sessions, specifically designed for Andersen A3 charger users on the Octopus Energy Intelligent Go tariff.
 
+<!-- Last deployment trigger: 2026-02-13 23:16 UTC -->
+
 **Backend:** Neon Postgres  
 **Frontend:** Vercel-ready static site  
 **API:** Express.js serverless functions
