@@ -160,23 +160,35 @@ The Andersen A3 may offer an API that could be integrated:
 
 ### Octopus Energy Integration
 
+**📖 Full Setup Guide**: See [OCTOPUS_API_SETUP.md](./OCTOPUS_API_SETUP.md) for comprehensive instructions.
+
+Octopus Energy provides a **free, public REST API** with excellent documentation!
+
 #### Current Support
 - Manual tariff rate entry (default: 7.5p/kWh for Intelligent Go off-peak)
 - Cost calculation based on entered rates
+- ✅ **Works now** - No setup required
 
-#### Future Enhancement Options
+#### Future Enhancement: Octopus Energy API Integration
 
-1. **Octopus Energy API Integration**:
-   - Fetch real-time tariff rates
-   - Automatically categorize charges as peak/off-peak
-   - Get actual consumption data from smart meter
-   
-   To implement:
-   ```javascript
-   // Add Octopus API credentials to .env
-   OCTOPUS_API_KEY=your_api_key
-   OCTOPUS_ACCOUNT_NUMBER=your_account_number
-   ```
+The Octopus Energy API can provide:
+- ✅ **Half-hourly electricity consumption** from your smart meter
+- ✅ **Real-time tariff rates** (Intelligent Octopus Go pricing)
+- ✅ **Smart charging schedules** (if using Intelligent Octopus)
+- ✅ **Accurate cost calculations** based on actual usage
+- ⚠️ **Not yet implemented** - See [OCTOPUS_API_SETUP.md](./OCTOPUS_API_SETUP.md)
+
+**To prepare for API integration:**
+1. Get your API key from Octopus dashboard: Personal Details → Development Settings
+2. Find your MPAN (13-digit meter point number) and meter serial number
+3. Follow the complete guide in [OCTOPUS_API_SETUP.md](./OCTOPUS_API_SETUP.md)
+4. Add credentials to environment variables when implementation is ready
+
+**Benefits:**
+- Completely free API
+- Actual consumption data from smart meter
+- Exact tariff rates applied to your sessions
+- Historical data available
 
 2. **Smart Tariff Detection**:
    - Intelligent Go off-peak: 23:30-05:30 (7.5p/kWh)

@@ -3,3 +3,8 @@ node_modules/
 .DS_Store
 .env
 data/*.json
+
+# Credentials and secrets
+YOUR_CREDENTIALS.txt
+VERCEL_QUICKREF.txt
+ANDERSEN_QUICKREF.txt
