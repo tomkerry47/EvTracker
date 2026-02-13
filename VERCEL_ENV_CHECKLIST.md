@@ -11,11 +11,21 @@ Your deployment is failing because these environment variables are missing. Foll
 Add these **exactly as shown** in your Vercel project:
 
 ### 1. DATABASE_URL (Required)
+
+**⚠️ CRITICAL: Format Must Be Exact - See [DATABASE_URL_FIX.md](./DATABASE_URL_FIX.md) if confused**
+
 ```
 Name: DATABASE_URL
 Value: postgresql://neondb_owner:npg_3gZqomRLMVh0@ep-dry-moon-abu5f8m3-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
 Environments: ✅ Production ✅ Preview ✅ Development
 ```
+
+**IMPORTANT FORMAT NOTES:**
+- ❌ Do NOT include `psql` at the beginning
+- ❌ Do NOT use quotes `'...'` around the URL
+- ❌ Do NOT use `&amp;` (use plain `&` ampersand)
+- ✅ Must start with `postgresql://`
+- ✅ Copy the value above EXACTLY as shown
 
 ### 2. OCTOPUS_API_KEY (Required for Import)
 ```

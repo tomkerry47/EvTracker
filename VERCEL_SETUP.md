@@ -27,14 +27,34 @@ Your Neon Postgres connection string. **Without this, the app cannot store or re
 
 - **Name**: `DATABASE_URL`
 - **Value**: Your full Neon Postgres connection string
-- **Format**: `postgresql://username:password@host.neon.tech/dbname?sslmode=require`
+- **Format**: `postgresql://username:password@host.neon.tech/dbname?sslmode=require&channel_binding=require`
 - **Example**: `postgresql://neondb_owner:npg_xxx@ep-xxx.neon.tech/neondb?sslmode=require`
+
+**⚠️ IMPORTANT: DATABASE_URL Format**
+
+❌ **WRONG - Don't copy the psql command:**
+```
+psql 'postgresql://...'
+```
+
+✅ **CORRECT - Only the URL without psql or quotes:**
+```
+postgresql://...
+```
+
+**Common mistakes to avoid:**
+- ❌ Including `psql` at the start
+- ❌ Wrapping in quotes `'...'`
+- ❌ Using `&amp;` instead of `&`
+
+**See [DATABASE_URL_FIX.md](./DATABASE_URL_FIX.md) for detailed format help!**
 
 **Where to get it:**
 - Go to [Neon dashboard](https://console.neon.tech/)
 - Select your project
 - Click "Connection Details" or "Connection String"
-- Copy the entire connection string
+- **Copy ONLY the URL part** (starts with `postgresql://`)
+- Do NOT copy `psql '...'` if shown
 
 ### 2. OCTOPUS_API_KEY (REQUIRED for import feature)
 
