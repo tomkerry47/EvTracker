@@ -2,6 +2,10 @@
 
 A web application for tracking electric vehicle charging sessions, specifically designed for Andersen A3 charger users on the Octopus Energy Intelligent Go tariff.
 
+**Backend:** Supabase (PostgreSQL)  
+**Frontend:** Vercel-ready static site  
+**API:** Express.js serverless functions
+
 ## Features
 
 - 📊 **Dashboard** with charging statistics (total sessions, energy, costs)
@@ -10,6 +14,14 @@ A web application for tracking electric vehicle charging sessions, specifically 
 - 💰 **Cost tracking** with customizable tariff rates
 - 🔋 **State of Charge (SoC)** tracking
 - 📱 **Responsive design** for desktop and mobile
+- ☁️ **Cloud-native** with Supabase backend and Vercel hosting
+
+## Architecture
+
+- **Backend**: Supabase PostgreSQL database with Row Level Security
+- **API**: Express.js serverless functions (Vercel compatible)
+- **Frontend**: Vanilla HTML/CSS/JavaScript (no build step required)
+- **Hosting**: Designed for Vercel deployment
 
 ## Quick Start
 
@@ -17,8 +29,10 @@ A web application for tracking electric vehicle charging sessions, specifically 
 
 - Node.js (v14 or higher)
 - npm (comes with Node.js)
+- A [Supabase](https://supabase.com/) account
+- A [Vercel](https://vercel.com/) account (for deployment)
 
-### Installation
+### Local Development Setup
 
 1. Clone the repository:
 ```bash
@@ -31,15 +45,50 @@ cd EvTracker
 npm install
 ```
 
-3. Start the server:
+3. Set up Supabase:
+   - Create a new project at [supabase.com](https://supabase.com/)
+   - Go to SQL Editor and run the schema from `supabase-schema.sql`
+   - Get your project URL and anon key from Settings > API
+
+4. Configure environment variables:
+```bash
+cp .env.example .env
+```
+Edit `.env` and add your Supabase credentials:
+```env
+SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_ANON_KEY=your-anon-key-here
+PORT=3000
+```
+
+5. Start the development server:
 ```bash
 npm start
 ```
 
-4. Open your browser and navigate to:
+6. Open your browser and navigate to:
 ```
 http://localhost:3000
 ```
+
+## Deployment
+
+### Deploy to Vercel
+
+See the detailed [DEPLOYMENT.md](./DEPLOYMENT.md) guide for step-by-step instructions.
+
+**Quick Deploy:**
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/tomkerry47/EvTracker)
+
+1. Click the button above or go to [Vercel Dashboard](https://vercel.com/new)
+2. Import your repository
+3. Add environment variables:
+   - `SUPABASE_URL`
+   - `SUPABASE_ANON_KEY`
+4. Deploy!
+
+Your app will be live at `https://your-project.vercel.app`
 
 ## Usage
 
@@ -124,11 +173,25 @@ To implement API integration:
 
 ## Data Storage
 
-- Sessions are stored in `data/sessions.json`
-- File-based storage for simplicity
-- Can be upgraded to a database (SQLite, PostgreSQL) for production use
+- **Database**: Supabase PostgreSQL database
+- **Table**: `charging_sessions` with proper indexes for performance
+- **Security**: Row Level Security (RLS) policies for data protection
+- **Backups**: Automatic backups via Supabase (configurable)
+- **Scalability**: Cloud-native, scales automatically with usage
+
+See `supabase-schema.sql` for the complete database schema.
 
 ## Configuration
+
+### Environment Variables
+
+Required environment variables (set in `.env` for local, Vercel settings for production):
+
+```env
+SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_ANON_KEY=your-anon-key-here
+PORT=3000  # Optional, for local development
+```
 
 ### Default Tariff Rates
 
@@ -137,22 +200,36 @@ Edit the default tariff rate in `public/index.html`:
 <input type="number" id="tariffRate" step="0.01" min="0" value="7.5" required>
 ```
 
-### Port Configuration
-
-Change the port in `server.js` or use environment variable:
-```bash
-PORT=8080 npm start
-```
-
 ## API Documentation
+
+The API is built with Express.js and can be deployed as Vercel serverless functions.
 
 ### Endpoints
 
 #### GET `/api/sessions`
-Returns all charging sessions
+Returns all charging sessions, ordered by creation date (newest first)
+
+**Response:**
+```json
+[
+  {
+    "id": "1234567890-abc123",
+    "date": "2024-02-13",
+    "startTime": "23:30",
+    "endTime": "05:30",
+    "energyAdded": 45.5,
+    "startSoC": 20,
+    "endSoC": 80,
+    "tariffRate": 7.5,
+    "cost": 3.41,
+    "notes": "Overnight charge",
+    "createdAt": "2024-02-13T23:30:00Z"
+  }
+]
+```
 
 #### GET `/api/sessions/:id`
-Returns a specific session
+Returns a specific session by ID
 
 #### POST `/api/sessions`
 Create a new session
@@ -181,42 +258,114 @@ Delete a session
 #### GET `/api/stats`
 Returns aggregated statistics
 
+**Response:**
+```json
+{
+  "totalSessions": 10,
+  "totalEnergy": 450.5,
+  "totalCost": 33.79,
+  "averageEnergy": 45.05
+}
+```
+
 ## Development
 
 ### Project Structure
 ```
 EvTracker/
-├── server.js           # Express server and API
-├── package.json        # Dependencies
-├── data/
-│   └── sessions.json   # Data storage (auto-generated)
-└── public/
-    ├── index.html      # Main dashboard
-    ├── styles.css      # Styling
-    └── app.js          # Frontend JavaScript
+├── server.js              # Express API server (Vercel serverless ready)
+├── package.json           # Dependencies and scripts
+├── vercel.json            # Vercel deployment configuration
+├── supabase-schema.sql    # Database schema for Supabase
+├── DEPLOYMENT.md          # Detailed deployment guide
+├── .env.example           # Environment variables template
+└── public/                # Static frontend files
+    ├── index.html         # Main dashboard
+    ├── styles.css         # Styling
+    └── app.js             # Frontend JavaScript
 ```
+
+### Technology Stack
+
+- **Backend Framework**: Express.js
+- **Database**: Supabase (PostgreSQL)
+- **Database Client**: @supabase/supabase-js
+- **Frontend**: Vanilla HTML/CSS/JavaScript
+- **Hosting**: Vercel (serverless functions)
+- **Environment**: dotenv for local development
 
 ### Adding Features
 
-1. Backend changes: Edit `server.js`
-2. Frontend changes: Edit files in `public/`
-3. Restart server to apply changes
+1. **Backend changes**: Edit `server.js`
+   - Add new API endpoints
+   - Modify database queries
+   - Update data transformations
+
+2. **Frontend changes**: Edit files in `public/`
+   - Update UI in `index.html`
+   - Add styles to `styles.css`
+   - Modify logic in `app.js`
+
+3. **Database changes**: Update `supabase-schema.sql`
+   - Add new tables or columns
+   - Create indexes
+   - Update RLS policies
+
+4. **Deploy**: Push to Git (auto-deploys on Vercel)
 
 ## Troubleshooting
 
 ### Server won't start
-- Check if port 3000 is already in use
-- Try a different port: `PORT=8080 npm start`
+- **Missing credentials**: Check that `SUPABASE_URL` and `SUPABASE_ANON_KEY` are set in `.env`
+- **Port in use**: Try a different port: `PORT=8080 npm start`
+- **Dependencies**: Run `npm install` to ensure all packages are installed
+
+### Database connection errors
+- **Invalid credentials**: Verify Supabase URL and anon key are correct
+- **Table doesn't exist**: Run the SQL schema from `supabase-schema.sql` in Supabase SQL Editor
+- **Network issues**: Check your internet connection and Supabase project status
 
 ### Sessions not saving
-- Check if `data/` directory exists
-- Verify write permissions
+- **Database permissions**: Verify RLS policies in Supabase allow inserts
+- **Invalid data**: Check browser console for validation errors
+- **API errors**: Check server logs for error messages
 
-### Can't access from other devices
-- Server runs on localhost by default
-- To access from network, bind to 0.0.0.0:
-  ```javascript
-  app.listen(PORT, '0.0.0.0', () => { ... });
+### Deployment issues on Vercel
+- **Build fails**: Ensure all dependencies are in `package.json`
+- **Environment variables**: Set `SUPABASE_URL` and `SUPABASE_ANON_KEY` in Vercel project settings
+- **Function timeout**: Check Vercel function logs for errors
+- **Routes not working**: Verify `vercel.json` configuration is correct
+
+### API returns 500 errors
+- Check Vercel function logs in deployment dashboard
+- Verify environment variables are set correctly
+- Ensure database table schema matches the code
+- Check Supabase project status and database connection
+
+## Migration from File-based Storage
+
+If you're migrating from the previous file-based version:
+
+1. Export your existing data from `data/sessions.json`
+2. Set up Supabase and run the schema
+3. Import data via SQL:
+
+```sql
+INSERT INTO charging_sessions (id, date, start_time, end_time, energy_added, start_soc, end_soc, tariff_rate, cost, notes)
+VALUES ('your-id', '2024-02-13', '23:30', '05:30', 45.5, 20, 80, 7.5, 3.41, 'Notes');
+```
+
+Or use the API to bulk import:
+```javascript
+// Script to import from JSON
+const sessions = require('./data/sessions.json');
+for (const session of sessions) {
+  await fetch('https://your-app.vercel.app/api/sessions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(session)
+  });
+}
   ```
 
 ## Future Enhancements
