@@ -3,24 +3,25 @@
 ## Summary
 
 Your EvTracker application has been successfully migrated to use:
-- **Supabase** for the backend database (PostgreSQL)
+- **Neon Postgres** for the backend database (serverless PostgreSQL)
 - **Vercel** for frontend hosting and serverless API functions
 
-All the code is ready! You just need to set up your Supabase and Vercel accounts.
+All the code is ready! You just need to set up your Neon and Vercel accounts.
 
 ## What You Need to Provide
 
-### 1. Supabase Credentials
+### 1. Neon Postgres Connection String
 
-You need to create a free Supabase account and get two values:
+You need to create a free Neon account and get your connection string:
 
-1. **SUPABASE_URL** - Your project URL
-   - Example: `https://abcdefghijk.supabase.co`
-   - Found in: Supabase Dashboard > Settings > API
+1. **DATABASE_URL** - Your PostgreSQL connection string
+   - Example: `postgresql://user:password@host.neon.tech/dbname?sslmode=require`
+   - Found in: Neon Dashboard > Connection Details
 
-2. **SUPABASE_ANON_KEY** - Your public API key
-   - Example: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` (very long string)
-   - Found in: Supabase Dashboard > Settings > API
+The connection string includes:
+- Username and password
+- Host and database name
+- SSL mode (required for security)
 
 ### 2. Vercel Account
 
@@ -33,7 +34,7 @@ You need a free Vercel account connected to your GitHub repository.
 Follow the guide in **[QUICKSTART.md](./QUICKSTART.md)**
 
 This walks you through:
-1. Creating a Supabase project (5 minutes)
+1. Creating a Neon project (5 minutes)
 2. Deploying to Vercel (3 minutes)
 3. Testing your app (2 minutes)
 
@@ -42,8 +43,7 @@ This walks you through:
 Follow the comprehensive guide in **[DEPLOYMENT.md](./DEPLOYMENT.md)**
 
 This includes:
-- Detailed Supabase configuration
-- Row Level Security setup
+- Detailed Neon Postgres configuration
 - Custom domain configuration
 - Monitoring and backups
 - Troubleshooting
@@ -53,7 +53,7 @@ This includes:
 Here's what was changed in your repository:
 
 ### New Files
-- ✅ `supabase-schema.sql` - Database table structure
+- ✅ `neon-schema.sql` - Database table structure for Neon Postgres
 - ✅ `vercel.json` - Vercel deployment configuration
 - ✅ `.env.example` - Template for environment variables
 - ✅ `DEPLOYMENT.md` - Comprehensive deployment guide
@@ -62,8 +62,8 @@ Here's what was changed in your repository:
 - ✅ `WHAT_YOU_NEED.md` - This file!
 
 ### Modified Files
-- ✅ `server.js` - Now uses Supabase instead of JSON files
-- ✅ `package.json` - Added Supabase and dotenv dependencies
+- ✅ `server.js` - Now uses Neon Postgres with direct pg connection
+- ✅ `package.json` - Added pg (node-postgres) dependency
 - ✅ `README.md` - Updated with new architecture
 
 ### No Changes Needed
@@ -75,16 +75,16 @@ Here's what was changed in your repository:
 
 If you want to test locally first:
 
-1. **Set up Supabase:**
-   - Create account at [supabase.com](https://supabase.com)
+1. **Set up Neon Postgres:**
+   - Create account at [neon.tech](https://neon.tech)
    - Create a new project
-   - Run the SQL from `supabase-schema.sql` in SQL Editor
-   - Get your credentials
+   - Run the SQL from `neon-schema.sql` in SQL Editor
+   - Copy your connection string
 
 2. **Configure locally:**
    ```bash
    cp .env.example .env
-   # Edit .env and add your Supabase credentials
+   # Edit .env and add your Neon connection string
    ```
 
 3. **Install and run:**
@@ -96,17 +96,17 @@ If you want to test locally first:
 4. **Test:**
    - Visit http://localhost:3000
    - Add a charging session
-   - Verify it saves to Supabase
+   - Verify it saves to Neon Postgres
 
 ## Cost Estimate
 
 Both services have generous free tiers:
 
-**Supabase Free Tier:**
-- 500MB database storage
-- 2GB bandwidth per month
-- Unlimited API requests
+**Neon Postgres Free Tier:**
+- 0.5GB storage
+- Unlimited queries
 - Automatic backups
+- Scale to zero when idle
 
 **Vercel Free Tier:**
 - 100GB bandwidth per month
@@ -115,7 +115,7 @@ Both services have generous free tiers:
 - Custom domains
 
 **For personal use tracking ~100 sessions/month:**
-- Database: ~100KB (well within 500MB)
+- Database: ~100KB (well within 0.5GB)
 - Bandwidth: ~10MB (well within limits)
 - **Cost: $0 per month**
 
@@ -130,11 +130,12 @@ If you encounter any issues:
 
 2. **Common issues:**
    - Missing credentials → Check `.env` file
-   - Database errors → Run `supabase-schema.sql` again
+   - Database errors → Run `neon-schema.sql` again
    - Deployment fails → Check environment variables in Vercel
+   - Connection errors → Ensure connection string includes `?sslmode=require`
 
 3. **Get help:**
-   - Supabase docs: https://supabase.com/docs
+   - Neon docs: https://neon.tech/docs
    - Vercel docs: https://vercel.com/docs
    - Open a GitHub issue
 
