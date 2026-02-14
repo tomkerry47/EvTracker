@@ -9,9 +9,22 @@ document.addEventListener('DOMContentLoaded', () => {
     setDefaultDate();
     setupCostCalculation();
     setupImportForm();
-    setupManualEntryToggle();
+    setupModals();
     setupAutoDetectRateToggle();
+    setupFilterButtons();
+    displayLastImportInfo();
 });
+
+// Setup filter buttons
+function setupFilterButtons() {
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const filter = btn.dataset.filter;
+            loadSessions(filter);
+            loadStats(filter);
+        });
+    });
+}
 
 // Set default date to today
 function setDefaultDate() {
@@ -51,8 +64,12 @@ function setupForm() {
     });
 }
 
+// Global filter state
+let currentFilter = 'all';
+
 // Load and display all sessions
-async function loadSessions() {
+async function loadSessions(filter = currentFilter) {
+    currentFilter = filter;
     try {
         const response = await fetch(`${API_URL}/sessions`);
         const sessions = await response.json();
@@ -68,7 +85,10 @@ async function loadSessions() {
         }
         console.log('=== End Frontend Receive ===');
         
-        displaySessions(sessions);
+        // Filter sessions based on current filter
+        const filteredSessions = filterSessionsByDate(sessions, filter);
+        displaySessions(filteredSessions);
+        updateFilterButtons(filter);
     } catch (error) {
         console.error('Error loading sessions:', error);
         alert('Failed to load charging sessions');
@@ -76,15 +96,34 @@ async function loadSessions() {
 }
 
 // Load and display statistics
-async function loadStats() {
+async function loadStats(filter = currentFilter) {
     try {
         const response = await fetch(`${API_URL}/stats`);
-        const stats = await response.json();
+        const allStats = await response.json();
         
-        document.getElementById('totalSessions').textContent = stats.totalSessions;
-        document.getElementById('totalEnergy').textContent = `${stats.totalEnergy.toFixed(1)} kWh`;
-        document.getElementById('totalCost').textContent = `£${stats.totalCost.toFixed(2)}`;
-        document.getElementById('avgEnergy').textContent = `${stats.averageEnergy.toFixed(1)} kWh`;
+        // If filter is applied, calculate filtered stats
+        if (filter !== 'all') {
+            const sessionsResponse = await fetch(`${API_URL}/sessions`);
+            const allSessions = await sessionsResponse.json();
+            const filteredSessions = filterSessionsByDate(allSessions, filter);
+            
+            // Calculate filtered stats
+            const totalSessions = filteredSessions.length;
+            const totalEnergy = filteredSessions.reduce((sum, s) => sum + parseFloat(s.energyAdded), 0);
+            const totalCost = filteredSessions.reduce((sum, s) => sum + parseFloat(s.cost), 0);
+            const averageEnergy = totalSessions > 0 ? totalEnergy / totalSessions : 0;
+            
+            document.getElementById('totalSessions').textContent = totalSessions;
+            document.getElementById('totalEnergy').textContent = `${totalEnergy.toFixed(1)} kWh`;
+            document.getElementById('totalCost').textContent = `£${totalCost.toFixed(2)}`;
+            document.getElementById('avgEnergy').textContent = `${averageEnergy.toFixed(1)} kWh`;
+        } else {
+            // Use all stats
+            document.getElementById('totalSessions').textContent = allStats.totalSessions;
+            document.getElementById('totalEnergy').textContent = `${allStats.totalEnergy.toFixed(1)} kWh`;
+            document.getElementById('totalCost').textContent = `£${allStats.totalCost.toFixed(2)}`;
+            document.getElementById('avgEnergy').textContent = `${allStats.averageEnergy.toFixed(1)} kWh`;
+        }
     } catch (error) {
         console.error('Error loading stats:', error);
     }
@@ -118,12 +157,9 @@ function displaySessions(sessions) {
 // Create HTML for a session card
 function createSessionCard(session) {
     const duration = calculateDuration(session.startTime, session.endTime);
-    const socChange = session.startSoC && session.endSoC 
-        ? `${session.startSoC}% → ${session.endSoC}%` 
-        : 'N/A';
     
     const source = session.source || 'manual';
-    const sourceBadge = `<span class="session-source ${source}">${source === 'octopus' ? '🐙 Octopus' : '👤 Manual'}</span>`;
+    const sourceBadge = `<span class="session-source ${source}">${source === 'octopus' ? 'OCTOPUS AUTO' : 'MANUAL'}</span>`;
     
     return `
         <div class="session-card">
@@ -145,10 +181,6 @@ function createSessionCard(session) {
                     <span class="detail-value">${duration}</span>
                 </div>
                 <div class="detail-item">
-                    <span class="detail-label">SoC Change</span>
-                    <span class="detail-value">${socChange}</span>
-                </div>
-                <div class="detail-item">
                     <span class="detail-label">Tariff Rate</span>
                     <span class="detail-value">${session.tariffRate}p/kWh</span>
                 </div>
@@ -157,7 +189,6 @@ function createSessionCard(session) {
                     <span class="detail-value">£${parseFloat(session.cost).toFixed(2)}</span>
                 </div>
             </div>
-            ${session.notes ? `<div class="session-notes">${session.notes}</div>` : ''}
         </div>
     `;
 }
@@ -189,9 +220,9 @@ async function addSession() {
             document.getElementById('sessionForm').reset();
             setDefaultDate();
             document.getElementById('tariffRate').value = '7.5';
-            // Hide the form after successful add
-            document.getElementById('manualEntryForm').style.display = 'none';
-            document.getElementById('toggleManualEntry').textContent = '➕ Add Manual Entry';
+            // Close the modal
+            document.getElementById('manualEntryModal').style.display = 'none';
+            document.body.style.overflow = 'auto';
             await loadSessions();
             await loadStats();
         } else {
@@ -239,6 +270,36 @@ function calculateDuration(startTime, endTime) {
     return `${hours}h ${minutes}m`;
 }
 
+// Filter sessions by date range
+function filterSessionsByDate(sessions, filter) {
+    if (filter === 'all') return sessions;
+    
+    const now = new Date();
+    const daysMap = { '7': 7, '30': 30, '90': 90 };
+    const days = daysMap[filter];
+    
+    if (!days) return sessions;
+    
+    const cutoffDate = new Date(now);
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+    
+    return sessions.filter(session => {
+        const sessionDate = new Date(session.date);
+        return sessionDate >= cutoffDate;
+    });
+}
+
+// Update filter button states
+function updateFilterButtons(activeFilter) {
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        if (btn.dataset.filter === activeFilter) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+}
+
 // Helper: Format date nicely
 function formatDate(dateString) {
     console.log('formatDate input:', dateString, 'Type:', typeof dateString);
@@ -253,31 +314,68 @@ function formatDate(dateString) {
     return formatted;
 }
 
-// Setup manual entry toggle
-function setupManualEntryToggle() {
-    const toggleButton = document.getElementById('toggleManualEntry');
-    const manualForm = document.getElementById('manualEntryForm');
-    const cancelButton = document.getElementById('cancelManualEntry');
+// Setup modals
+function setupModals() {
+    // Get modals
+    const manualModal = document.getElementById('manualEntryModal');
+    const importModal = document.getElementById('importModal');
     
-    toggleButton.addEventListener('click', () => {
-        if (manualForm.style.display === 'none') {
-            manualForm.style.display = 'block';
-            toggleButton.textContent = '➖ Hide Manual Entry';
-            // Re-set default dates when showing the form
-            setDefaultDate();
-            manualForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        } else {
-            manualForm.style.display = 'none';
-            toggleButton.textContent = '➕ Add Manual Entry';
-        }
+    // Get buttons
+    const openManualBtn = document.getElementById('openManualEntryModal');
+    const openImportBtn = document.getElementById('openImportModal');
+    
+    // Get close buttons
+    const closeBtns = document.querySelectorAll('.close');
+    const cancelBtns = document.querySelectorAll('.btn-cancel');
+    
+    // Open modals
+    openManualBtn.addEventListener('click', () => {
+        manualModal.style.display = 'flex';
+        setDefaultDate();
+        document.body.style.overflow = 'hidden'; // Prevent background scroll
     });
     
-    cancelButton.addEventListener('click', () => {
-        manualForm.style.display = 'none';
-        toggleButton.textContent = '➕ Add Manual Entry';
-        document.getElementById('sessionForm').reset();
-        setDefaultDate();
-        document.getElementById('tariffRate').value = '7.5';
+    openImportBtn.addEventListener('click', () => {
+        importModal.style.display = 'flex';
+        setDefaultDate(); // Set import dates
+        document.body.style.overflow = 'hidden';
+    });
+    
+    // Close modal function
+    function closeModal(modal) {
+        modal.style.display = 'none';
+        document.body.style.overflow = 'auto';
+        // Reset forms
+        if (modal.id === 'manualEntryModal') {
+            document.getElementById('sessionForm').reset();
+            setDefaultDate();
+            document.getElementById('tariffRate').value = '7.5';
+        }
+    }
+    
+    // Close buttons
+    closeBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const modalId = btn.dataset.modal;
+            const modal = document.getElementById(modalId);
+            closeModal(modal);
+        });
+    });
+    
+    // Cancel buttons
+    cancelBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const modalId = btn.dataset.modal;
+            const modal = document.getElementById(modalId);
+            closeModal(modal);
+        });
+    });
+    
+    // Click outside to close
+    window.addEventListener('click', (e) => {
+        if (e.target.classList.contains('modal')) {
+            closeModal(e.target);
+        }
     });
 }
 
@@ -343,6 +441,10 @@ async function importFromOctopus() {
             const message = `Successfully imported ${data.imported} session(s)${data.skipped > 0 ? ` (${data.skipped} duplicate(s) skipped)` : ''}`;
             showImportStatus(message, 'success');
             
+            // Store last import info
+            storeLastImportInfo(data.imported);
+            displayLastImportInfo();
+            
             // Reload sessions and stats
             await loadSessions();
             await loadStats();
@@ -372,4 +474,41 @@ function showImportStatus(message, type) {
             statusDiv.style.display = 'none';
         }, 5000);
     }
+}
+
+// Store last import information
+function storeLastImportInfo(count) {
+    const importInfo = {
+        timestamp: new Date().toISOString(),
+        count: count
+    };
+    localStorage.setItem('lastImport', JSON.stringify(importInfo));
+}
+
+// Display last import information
+function displayLastImportInfo() {
+    const lastImportDiv = document.getElementById('lastImportInfo');
+    const importInfo = localStorage.getItem('lastImport');
+    
+    if (!importInfo) {
+        // Show a placeholder message when no import has been done yet
+        lastImportDiv.innerHTML = `No automatic imports yet - use "Import Sessions" below to get started`;
+        lastImportDiv.style.display = 'block';
+        return;
+    }
+    
+    const { timestamp, count } = JSON.parse(importInfo);
+    const importDate = new Date(timestamp);
+    
+    // Format time as HH:MM
+    const timeStr = importDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    
+    // Format date as "14th Feb"
+    const day = importDate.getDate();
+    const suffix = ['th', 'st', 'nd', 'rd'][day % 10 > 3 ? 0 : (day % 100 - day % 10 !== 10) * day % 10];
+    const monthStr = importDate.toLocaleDateString('en-GB', { month: 'short' });
+    const dateStr = `${day}${suffix} ${monthStr}`;
+    
+    lastImportDiv.innerHTML = `Last refresh at ${timeStr} on ${dateStr} - ${count} session${count !== 1 ? 's' : ''} imported`;
+    lastImportDiv.style.display = 'block';
 }

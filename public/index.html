@@ -33,18 +33,25 @@
             </div>
         </div>
 
-        <!-- Manual Entry Button -->
-        <div class="manual-entry-section">
-            <button id="toggleManualEntry" class="btn btn-secondary">
-                ➕ Add Manual Entry
+        <!-- Action Buttons for Mobile -->
+        <div class="action-buttons">
+            <button id="openManualEntryModal" class="btn btn-primary">
+                ➕ Manual Entry
+            </button>
+            <button id="openImportModal" class="btn btn-secondary">
+                🐙 Import Sessions
             </button>
         </div>
 
-        <!-- Add New Session Form (Initially Hidden) -->
-        <div class="form-section" id="manualEntryForm" style="display: none;">
-            <h2>Log New Charging Session Manually</h2>
-            <p class="form-description">Use this only if automatic import doesn't capture a session</p>
-            <form id="sessionForm">
+        <!-- Manual Entry Modal -->
+        <div id="manualEntryModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Log New Charging Session</h2>
+                    <span class="close" data-modal="manualEntryModal">&times;</span>
+                </div>
+                <p class="form-description">Use this only if automatic import doesn't capture a session</p>
+                <form id="sessionForm">
                 <div class="form-row">
                     <div class="form-group">
                         <label for="date">Date</label>
@@ -80,16 +87,21 @@
                 </div>
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Add Session</button>
-                    <button type="button" id="cancelManualEntry" class="btn btn-secondary">Cancel</button>
+                    <button type="button" class="btn-cancel" data-modal="manualEntryModal">Cancel</button>
                 </div>
             </form>
+            </div>
         </div>
 
-        <!-- Octopus Energy Import Section -->
-        <div class="import-section">
-            <h2>🐙 Import from Octopus Energy</h2>
-            <p class="import-description">Automatically detect charging sessions from your smart meter data</p>
-            <div class="import-form">
+        <!-- Import Modal -->
+        <div id="importModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>🐙 Import from Octopus Energy</h2>
+                    <span class="close" data-modal="importModal">&times;</span>
+                </div>
+                <p class="import-description">Automatically detect charging sessions from your smart meter data</p>
+                <div class="import-form">
                 <div class="form-row">
                     <div class="form-group">
                         <label for="importDateFrom">From Date</label>
@@ -121,11 +133,21 @@
                 <button id="importButton" class="btn btn-import">Import Sessions</button>
                 <div id="importStatus" class="import-status"></div>
             </div>
+            </div>
         </div>
 
         <!-- Sessions History -->
         <div class="sessions-section">
-            <h2>Charging History</h2>
+            <div class="sessions-header">
+                <h2>Charging History</h2>
+                <div class="filter-buttons">
+                    <button class="filter-btn active" data-filter="all">All</button>
+                    <button class="filter-btn" data-filter="7">Last 7 Days</button>
+                    <button class="filter-btn" data-filter="30">Last 30 Days</button>
+                    <button class="filter-btn" data-filter="90">Last 90 Days</button>
+                </div>
+            </div>
+            <div id="lastImportInfo" class="last-import-info"></div>
             <div id="sessionsContainer">
                 <p class="no-sessions">No charging sessions recorded yet. Add your first session above!</p>
             </div>
