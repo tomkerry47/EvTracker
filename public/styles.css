@@ -44,17 +44,24 @@ header h1 {
 .stat-card {
     background: white;
     padding: 25px;
-    border-radius: 10px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     text-align: center;
+    transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    transform: translateY(-2px);
 }
 
 .stat-card h3 {
-    color: #666;
+    color: #495057;
     font-size: 0.9em;
     text-transform: uppercase;
     letter-spacing: 1px;
     margin-bottom: 10px;
+    font-weight: 600;
 }
 
 .stat-value {
@@ -67,8 +74,8 @@ header h1 {
 .form-section, .sessions-section {
     background: white;
     padding: 30px;
-    border-radius: 10px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     margin-bottom: 30px;
 }
 
@@ -93,49 +100,69 @@ header h1 {
 
 .form-group label {
     margin-bottom: 5px;
-    color: #555;
-    font-weight: 500;
+    color: #2c3e50;
+    font-weight: 600;
+    font-size: 0.95em;
 }
 
 .form-group input,
 .form-group textarea {
-    padding: 10px;
-    border: 2px solid #ddd;
-    border-radius: 5px;
+    padding: 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
     font-size: 1em;
-    transition: border-color 0.3s;
+    transition: all 0.3s ease;
+    background: #fafafa;
 }
 
 .form-group input:focus,
 .form-group textarea:focus {
     outline: none;
     border-color: #667eea;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 .form-group small {
     margin-top: 5px;
-    color: #888;
+    color: #6c757d;
     font-size: 0.85em;
 }
 
 .btn {
     padding: 12px 30px;
     border: none;
-    border-radius: 5px;
+    border-radius: 8px;
     font-size: 1em;
     cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s;
+    transition: all 0.3s ease;
+    font-weight: 600;
+    letter-spacing: 0.3px;
 }
 
 .btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+}
+
+.btn:active {
+    transform: translateY(0);
 }
 
 .btn-primary {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
     font-weight: bold;
+}
+
+.btn-secondary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-weight: 600;
+}
+
+.btn-secondary:hover {
+    background: linear-gradient(135deg, #7b8ff0 0%, #8a5bb8 100%);
 }
 
 .btn-danger {
@@ -154,14 +181,16 @@ header h1 {
 
 .session-card {
     border: 2px solid #e0e0e0;
-    border-radius: 8px;
+    border-radius: 12px;
     padding: 20px;
-    transition: border-color 0.3s, box-shadow 0.3s;
+    background: white;
+    transition: all 0.3s ease;
 }
 
 .session-card:hover {
     border-color: #667eea;
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+    transform: translateY(-2px);
 }
 
 .session-header {
@@ -174,9 +203,9 @@ header h1 {
 }
 
 .session-date {
-    font-size: 1.2em;
+    font-size: 1.25em;
     font-weight: bold;
-    color: #333;
+    color: #2c3e50;
 }
 
 .session-details {
@@ -193,23 +222,28 @@ header h1 {
 
 .detail-label {
     font-size: 0.85em;
-    color: #888;
-    margin-bottom: 3px;
+    color: #6c757d;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 5px;
 }
 
 .detail-value {
-    font-size: 1.1em;
+    font-size: 1.15em;
     font-weight: 600;
-    color: #333;
+    color: #2c3e50;
 }
 
 .session-notes {
     margin-top: 10px;
-    padding: 10px;
-    background: #f9f9f9;
+    padding: 12px;
+    background: #f8f9fa;
+    border-left: 3px solid #667eea;
     border-radius: 5px;
     font-style: italic;
-    color: #666;
+    color: #495057;
+    font-size: 0.95em;
 }
 
 .no-sessions {
@@ -238,8 +272,8 @@ header h1 {
 .import-section {
     background: white;
     padding: 30px;
-    border-radius: 10px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     margin-bottom: 30px;
 }
 
@@ -249,8 +283,10 @@ header h1 {
 }
 
 .import-description {
-    color: #666;
+    color: #495057;
     margin-bottom: 20px;
+    font-size: 1em;
+    line-height: 1.5;
 }
 
 .import-form {
@@ -328,22 +364,28 @@ header h1 {
 .manual-entry-section {
     background: white;
     padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     margin-bottom: 20px;
     text-align: center;
 }
 
 .form-description {
-    font-size: 0.9em;
-    color: #666;
+    font-size: 0.95em;
+    color: #6c757d;
     margin-bottom: 15px;
+    line-height: 1.5;
 }
 
 .form-actions {
     display: flex;
-    gap: 10px;
+    gap: 15px;
     justify-content: flex-start;
+    margin-top: 20px;
+}
+
+.form-actions .btn {
+    min-width: 150px;
 }
 
 #manualEntryForm {
@@ -364,13 +406,7 @@ header h1 {
 /* Auto-detect rate checkbox styling */
 #autoDetectRate {
     margin-right: 8px;
+    cursor: pointer;
 }
-
-.btn-secondary {
-    background: #6c757d;
-}
-
-.btn-secondary:hover {
-    background: #5a6268;
     transform: translateY(-2px);
 }

@@ -263,6 +263,8 @@ function setupManualEntryToggle() {
         if (manualForm.style.display === 'none') {
             manualForm.style.display = 'block';
             toggleButton.textContent = '➖ Hide Manual Entry';
+            // Re-set default dates when showing the form
+            setDefaultDate();
             manualForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         } else {
             manualForm.style.display = 'none';
