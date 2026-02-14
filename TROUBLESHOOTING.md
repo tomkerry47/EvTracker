@@ -360,3 +360,56 @@ See [FIX_OCTOPUS_IMPORT_ERROR.md](./FIX_OCTOPUS_IMPORT_ERROR.md) for complete in
 ---
 
 **Last Updated:** 2026-02-13
+
+---
+
+## Invalid Dates/Times in Octopus Import
+
+### Symptom
+Imported sessions from Octopus Energy show:
+- Wrong dates (shifted by a day)
+- Wrong times (hours off from actual charging times)
+- Times that don't match your Octopus Energy dashboard
+- Off-peak sessions appearing at wrong times
+
+### Example
+- **Expected**: Charging session at 11:30 PM on Jan 1st
+- **Wrong display**: Shows as 6:30 PM on Jan 1st or wrong date entirely
+
+### Cause
+Timezone handling issue in date/time extraction from Octopus API timestamps. The API returns times in ISO 8601 format with timezone (e.g., `2024-01-01T23:30:00Z`), but previous code didn't properly account for UK timezone when extracting dates and times.
+
+### Solution ✅ FIXED
+
+**This has been fixed in the latest version!** The code now properly uses UK timezone (`Europe/London`) for all date/time extraction.
+
+**If you imported sessions before this fix and they have wrong times:**
+
+1. **Wait for Vercel to redeploy** (automatic, takes 2-3 minutes)
+2. **Delete incorrect sessions** using the delete button on each session card
+3. **Re-import** the same date range again
+4. **Verify** that times now match your Octopus Energy dashboard
+
+### How to Verify Fix Worked
+
+After redeploying:
+1. Import a date range when you know you charged your car
+2. Check the session times match when you actually charged
+3. Compare with your Octopus Energy app/dashboard - times should match
+4. Off-peak sessions should show late night times (e.g., 11:30 PM - 5:30 AM)
+
+### Why UK Timezone?
+
+- Octopus Energy is UK-based
+- Your electricity meter operates on UK time
+- Tariff times (Intelligent Octopus Go: 11:30 PM - 5:30 AM) are in UK time
+- All imported sessions should reflect UK time
+
+### More Details
+
+See [OCTOPUS_IMPORT_FIX.md](./OCTOPUS_IMPORT_FIX.md) for:
+- Complete technical explanation
+- Before/after examples
+- How the fix works
+- FAQ about timezone handling
+
