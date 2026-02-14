@@ -66,22 +66,36 @@ app.get('/api/sessions', async (req, res) => {
     }
     
     // Transform data to match frontend expectations (camelCase)
-    const sessions = result.rows.map(session => ({
-      id: session.id,
-      date: session.date,
-      startTime: session.start_time,
-      endTime: session.end_time,
-      energyAdded: parseFloat(session.energy_added),
-      startSoC: session.start_soc,
-      endSoC: session.end_soc,
-      tariffRate: parseFloat(session.tariff_rate),
-      cost: parseFloat(session.cost),
-      notes: session.notes,
-      source: session.source || 'manual',
-      createdAt: session.created_at
-    }));
+    const sessions = result.rows.map(session => {
+      // Convert Date object to YYYY-MM-DD string to avoid timezone issues
+      const dateStr = session.date instanceof Date 
+        ? session.date.toISOString().split('T')[0]
+        : session.date;
+      
+      return {
+        id: session.id,
+        date: dateStr,
+        startTime: session.start_time,
+        endTime: session.end_time,
+        energyAdded: parseFloat(session.energy_added),
+        startSoC: session.start_soc,
+        endSoC: session.end_soc,
+        tariffRate: parseFloat(session.tariff_rate),
+        cost: parseFloat(session.cost),
+        notes: session.notes,
+        source: session.source || 'manual',
+        octopusSessionId: session.octopus_session_id,
+        createdAt: session.created_at
+      };
+    });
     
-    console.log('=== End Fetch ===');
+    console.log('=== Transformed for frontend ===');
+    if (sessions.length > 0) {
+      console.log('First session sent to frontend:');
+      console.log('  date:', sessions[0].date, 'Type:', typeof sessions[0].date);
+      console.log('  startTime:', sessions[0].startTime);
+    }
+    console.log('=== End Transform ===');
     
     res.json(sessions);
   } catch (error) {
