@@ -68,7 +68,7 @@ async function importDailyCharges() {
     for (const session of result) {
       try {
         // Generate unique ID using timestamp + random suffix to prevent collisions
-        const id = Date.now().toString() + '-' + Math.random().toString(36).substr(2, 9);
+        const id = Date.now().toString() + '-' + Math.random().toString(36).slice(2, 11);
         
         const query = `
           INSERT INTO charging_sessions (
