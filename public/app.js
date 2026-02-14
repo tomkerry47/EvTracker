@@ -9,6 +9,8 @@ document.addEventListener('DOMContentLoaded', () => {
     setDefaultDate();
     setupCostCalculation();
     setupImportForm();
+    setupManualEntryToggle();
+    setupAutoDetectRateToggle();
 });
 
 // Set default date to today
@@ -167,8 +169,8 @@ async function addSession() {
         startTime: document.getElementById('startTime').value,
         endTime: document.getElementById('endTime').value,
         energyAdded: parseFloat(document.getElementById('energyAdded').value),
-        startSoC: parseInt(document.getElementById('startSoC').value) || null,
-        endSoC: parseInt(document.getElementById('endSoC').value) || null,
+        startSoC: null,  // Not used in simplified form
+        endSoC: null,    // Not used in simplified form
         tariffRate: parseFloat(document.getElementById('tariffRate').value),
         cost: parseFloat(document.getElementById('cost').value),
         notes: document.getElementById('notes').value
@@ -187,6 +189,9 @@ async function addSession() {
             document.getElementById('sessionForm').reset();
             setDefaultDate();
             document.getElementById('tariffRate').value = '7.5';
+            // Hide the form after successful add
+            document.getElementById('manualEntryForm').style.display = 'none';
+            document.getElementById('toggleManualEntry').textContent = '➕ Add Manual Entry';
             await loadSessions();
             await loadStats();
         } else {
@@ -248,6 +253,46 @@ function formatDate(dateString) {
     return formatted;
 }
 
+// Setup manual entry toggle
+function setupManualEntryToggle() {
+    const toggleButton = document.getElementById('toggleManualEntry');
+    const manualForm = document.getElementById('manualEntryForm');
+    const cancelButton = document.getElementById('cancelManualEntry');
+    
+    toggleButton.addEventListener('click', () => {
+        if (manualForm.style.display === 'none') {
+            manualForm.style.display = 'block';
+            toggleButton.textContent = '➖ Hide Manual Entry';
+            manualForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+            manualForm.style.display = 'none';
+            toggleButton.textContent = '➕ Add Manual Entry';
+        }
+    });
+    
+    cancelButton.addEventListener('click', () => {
+        manualForm.style.display = 'none';
+        toggleButton.textContent = '➕ Add Manual Entry';
+        document.getElementById('sessionForm').reset();
+        setDefaultDate();
+        document.getElementById('tariffRate').value = '7.5';
+    });
+}
+
+// Setup auto-detect rate toggle
+function setupAutoDetectRateToggle() {
+    const autoDetectCheckbox = document.getElementById('autoDetectRate');
+    const manualRateGroup = document.getElementById('manualRateGroup');
+    
+    autoDetectCheckbox.addEventListener('change', () => {
+        if (autoDetectCheckbox.checked) {
+            manualRateGroup.style.display = 'none';
+        } else {
+            manualRateGroup.style.display = 'block';
+        }
+    });
+}
+
 // Setup import form
 function setupImportForm() {
     const importButton = document.getElementById('importButton');
@@ -259,7 +304,8 @@ async function importFromOctopus() {
     const dateFrom = document.getElementById('importDateFrom').value;
     const dateTo = document.getElementById('importDateTo').value;
     const threshold = parseFloat(document.getElementById('importThreshold').value);
-    const tariffRate = parseFloat(document.getElementById('importTariffRate').value);
+    const autoDetectRate = document.getElementById('autoDetectRate').checked;
+    const tariffRate = autoDetectRate ? null : parseFloat(document.getElementById('importTariffRate').value);
     const statusDiv = document.getElementById('importStatus');
     const importButton = document.getElementById('importButton');
     
@@ -271,11 +317,23 @@ async function importFromOctopus() {
     // Disable button and show loading
     importButton.disabled = true;
     importButton.textContent = 'Importing...';
-    showImportStatus('Fetching data from Octopus Energy API...', 'info');
+    const rateMsg = autoDetectRate ? 'auto-detecting rates' : `using ${tariffRate}p/kWh`;
+    showImportStatus(`Fetching data from Octopus Energy API (${rateMsg})...`, 'info');
     
     try {
         const response = await fetch(`${API_URL}/octopus/import`, {
             method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ 
+                dateFrom, 
+                dateTo, 
+                threshold, 
+                tariffRate, 
+                autoDetectRate 
+            })
+        });
             headers: {
                 'Content-Type': 'application/json'
             },

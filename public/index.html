@@ -33,9 +33,17 @@
             </div>
         </div>
 
-        <!-- Add New Session Form -->
-        <div class="form-section">
-            <h2>Log New Charging Session</h2>
+        <!-- Manual Entry Button -->
+        <div class="manual-entry-section">
+            <button id="toggleManualEntry" class="btn btn-secondary">
+                ➕ Add Manual Entry
+            </button>
+        </div>
+
+        <!-- Add New Session Form (Initially Hidden) -->
+        <div class="form-section" id="manualEntryForm" style="display: none;">
+            <h2>Log New Charging Session Manually</h2>
+            <p class="form-description">Use this only if automatic import doesn't capture a session</p>
             <form id="sessionForm">
                 <div class="form-row">
                     <div class="form-group">
@@ -57,30 +65,23 @@
                         <input type="number" id="energyAdded" step="0.1" min="0" required>
                     </div>
                     <div class="form-group">
-                        <label for="startSoC">Start SoC (%)</label>
-                        <input type="number" id="startSoC" min="0" max="100">
-                    </div>
-                    <div class="form-group">
-                        <label for="endSoC">End SoC (%)</label>
-                        <input type="number" id="endSoC" min="0" max="100">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
                         <label for="tariffRate">Tariff Rate (p/kWh)</label>
                         <input type="number" id="tariffRate" step="0.01" min="0" value="7.5" required>
                         <small>Default: 7.5p (Octopus Intelligent Go off-peak)</small>
                     </div>
                     <div class="form-group">
                         <label for="cost">Cost (£)</label>
-                        <input type="number" id="cost" step="0.01" min="0" required>
+                        <input type="number" id="cost" step="0.01" min="0" required readonly>
                     </div>
                 </div>
                 <div class="form-group">
-                    <label for="notes">Notes</label>
+                    <label for="notes">Notes (Optional)</label>
                     <textarea id="notes" rows="2" placeholder="Optional notes about this session..."></textarea>
                 </div>
-                <button type="submit" class="btn btn-primary">Add Session</button>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Add Session</button>
+                    <button type="button" id="cancelManualEntry" class="btn btn-secondary">Cancel</button>
+                </div>
             </form>
         </div>
 
@@ -103,10 +104,18 @@
                         <input type="number" id="importThreshold" step="0.1" min="0.5" value="2.0" required>
                         <small>Minimum kWh per 30min to detect charging</small>
                     </div>
+                </div>
+                <div class="form-row">
                     <div class="form-group">
-                        <label for="importTariffRate">Tariff Rate (p/kWh)</label>
-                        <input type="number" id="importTariffRate" step="0.01" min="0" value="7.5" required>
-                        <small>Intelligent Go off-peak rate</small>
+                        <label>
+                            <input type="checkbox" id="autoDetectRate" checked>
+                            Auto-detect tariff rate (7.5p off-peak, 24.5p peak)
+                        </label>
+                        <small>Unchecked if you want to set a fixed rate</small>
+                    </div>
+                    <div class="form-group" id="manualRateGroup" style="display: none;">
+                        <label for="importTariffRate">Fixed Tariff Rate (p/kWh)</label>
+                        <input type="number" id="importTariffRate" step="0.01" min="0" value="7.5">
                     </div>
                 </div>
                 <button id="importButton" class="btn btn-import">Import Sessions</button>

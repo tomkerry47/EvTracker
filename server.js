@@ -300,19 +300,27 @@ app.post('/api/octopus/import', async (req, res) => {
       });
     }
 
-    const { dateFrom, dateTo, threshold, tariffRate } = req.body;
+    const { dateFrom, dateTo, threshold, tariffRate, autoDetectRate } = req.body;
     
     // Validate inputs
     if (!dateFrom || !dateTo) {
       return res.status(400).json({ error: 'dateFrom and dateTo are required' });
     }
 
+    console.log('=== Import Request ===');
+    console.log('Date range:', dateFrom, 'to', dateTo);
+    console.log('Threshold:', threshold || 2.0, 'kWh');
+    console.log('Tariff rate:', tariffRate || 'auto-detect');
+    console.log('Auto-detect rate:', autoDetectRate);
+
     // Import sessions from Octopus
+    // Pass null for tariffRate if auto-detection is enabled
+    const effectiveTariffRate = autoDetectRate ? null : (tariffRate || 7.5);
     const sessions = await octopusClient.importSessions(
       dateFrom, 
       dateTo, 
       threshold || 2.0, 
-      tariffRate || 7.5
+      effectiveTariffRate
     );
 
     // Insert sessions into database
