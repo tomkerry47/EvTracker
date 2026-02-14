@@ -59,32 +59,34 @@ async function importDailyCharges() {
     );
     
     console.log('\n=== Import Results ===');
-    console.log(`✅ Sessions detected: ${result.sessions.length}`);
+    console.log(`✅ Sessions detected: ${result.length}`);
     
     // Insert sessions into database
     let imported = 0;
     let skipped = 0;
     
-    for (const session of result.sessions) {
+    for (const session of result) {
       try {
+        // Generate unique ID using timestamp + random suffix to prevent collisions
+        const id = Date.now().toString() + '-' + Math.random().toString(36).substr(2, 9);
+        
         const query = `
           INSERT INTO charging_sessions (
             id, date, energy_added, start_soc, end_soc, tariff_rate, cost,
-            duration, notes, source, octopus_session_id, start_time, end_time
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            notes, source, octopus_session_id, start_time, end_time
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
           ON CONFLICT (octopus_session_id) DO NOTHING
           RETURNING id
         `;
         
         const values = [
-          session.id,
+          id,
           session.date,
           session.energyAdded,
           session.startSoc,
           session.endSoc,
           session.tariffRate,
           session.cost,
-          session.duration,
           session.notes,
           'octopus',
           session.octopusSessionId,
@@ -109,8 +111,8 @@ async function importDailyCharges() {
     console.log('\n=== Summary ===');
     console.log(`✅ Successfully imported: ${imported} sessions`);
     console.log(`⏭️  Skipped (duplicates): ${skipped} sessions`);
-    console.log(`💰 Total cost: £${result.sessions.reduce((sum, s) => sum + s.cost, 0).toFixed(2)}`);
-    console.log(`⚡ Total energy: ${result.sessions.reduce((sum, s) => sum + s.energyAdded, 0).toFixed(2)} kWh`);
+    console.log(`💰 Total cost: £${result.reduce((sum, s) => sum + s.cost, 0).toFixed(2)}`);
+    console.log(`⚡ Total energy: ${result.reduce((sum, s) => sum + s.energyAdded, 0).toFixed(2)} kWh`);
     console.log('=== Daily Charge Import Completed ===\n');
     
   } catch (error) {
