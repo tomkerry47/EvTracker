@@ -334,16 +334,6 @@ async function importFromOctopus() {
                 autoDetectRate 
             })
         });
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                dateFrom,
-                dateTo,
-                threshold,
-                tariffRate
-            })
-        });
         
         const data = await response.json();
         
