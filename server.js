@@ -407,18 +407,21 @@ app.post('/api/octopus/import', async (req, res) => {
       sessions: importedSessions
     });
     
-    // Store last import info in database
-    if (importedSessions.length > 0) {
-      try {
-        await pool.query(
-          `INSERT INTO app_settings (key, value) 
-           VALUES ('last_import', $1)
-           ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()`,
-          [JSON.stringify({ timestamp: new Date().toISOString(), count: importedSessions.length })]
-        );
-      } catch (error) {
-        console.error('Error storing last import info:', error);
-      }
+    // Store last import info in database (always, even if no new sessions)
+    try {
+      await pool.query(
+        `INSERT INTO app_settings (key, value) 
+         VALUES ('last_import', $1)
+         ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()`,
+        [JSON.stringify({ 
+          timestamp: new Date().toISOString(), 
+          count: importedSessions.length,
+          total_detected: sessions.length,
+          skipped: skippedSessions.length
+        })]
+      );
+    } catch (error) {
+      console.error('Error storing last import info:', error);
     }
   } catch (error) {
     console.error('Error importing sessions from Octopus:', error);

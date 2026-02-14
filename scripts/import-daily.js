@@ -113,6 +113,25 @@ async function importDailyCharges() {
     console.log(`⏭️  Skipped (duplicates): ${skipped} sessions`);
     console.log(`💰 Total cost: £${result.reduce((sum, s) => sum + s.cost, 0).toFixed(2)}`);
     console.log(`⚡ Total energy: ${result.reduce((sum, s) => sum + s.energyAdded, 0).toFixed(2)} kWh`);
+    
+    // Store last import info in database (always, even if no new sessions)
+    try {
+      await pool.query(
+        `INSERT INTO app_settings (key, value) 
+         VALUES ('last_import', $1)
+         ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()`,
+        [JSON.stringify({ 
+          timestamp: new Date().toISOString(), 
+          count: imported,
+          total_detected: result.length,
+          skipped: skipped
+        })]
+      );
+      console.log('✅ Last import info stored in database');
+    } catch (error) {
+      console.error('⚠️  Warning: Could not store last import info:', error.message);
+    }
+    
     console.log('=== Daily Charge Import Completed ===\n');
     
   } catch (error) {

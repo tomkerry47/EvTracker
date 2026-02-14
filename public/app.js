@@ -536,6 +536,14 @@ function displayImportInfo(timestamp, count, element) {
     const monthStr = importDate.toLocaleDateString('en-GB', { month: 'short' });
     const dateStr = `${day}${suffix} ${monthStr}`;
     
-    element.innerHTML = `Last refresh at ${timeStr} on ${dateStr} - ${count} session${count !== 1 ? 's' : ''} imported`;
+    // Show message based on count
+    let message;
+    if (count === 0) {
+        message = `Last refresh at ${timeStr} on ${dateStr} - no new sessions found`;
+    } else {
+        message = `Last refresh at ${timeStr} on ${dateStr} - ${count} session${count !== 1 ? 's' : ''} imported`;
+    }
+    
+    element.innerHTML = message;
     element.style.display = 'block';
 }
