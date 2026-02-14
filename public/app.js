@@ -169,7 +169,10 @@ function createSessionCard(session) {
                     <span style="color: #888; font-size: 0.8em;">${session.startTime} - ${session.endTime}</span>
                     ${sourceBadge}
                 </div>
-                <button class="btn btn-danger delete-btn" data-id="${session.id}">Delete</button>
+                <button class="btn btn-danger delete-btn" data-id="${session.id}" title="Delete session">
+                    <span class="delete-icon">×</span>
+                    <span class="delete-text">Delete</span>
+                </button>
             </div>
             <div class="session-details">
                 <div class="detail-item">
@@ -486,18 +489,42 @@ function storeLastImportInfo(count) {
 }
 
 // Display last import information
-function displayLastImportInfo() {
+async function displayLastImportInfo() {
     const lastImportDiv = document.getElementById('lastImportInfo');
-    const importInfo = localStorage.getItem('lastImport');
     
-    if (!importInfo) {
-        // Show a placeholder message when no import has been done yet
-        lastImportDiv.innerHTML = `No automatic imports yet - use "Import Sessions" below to get started`;
-        lastImportDiv.style.display = 'block';
-        return;
+    try {
+        // Try to fetch from API first
+        const response = await fetch(`${API_URL}/settings/last_import`);
+        const data = await response.json();
+        
+        if (!data.value) {
+            // Fallback to localStorage for backwards compatibility
+            const localData = localStorage.getItem('lastImport');
+            if (!localData) {
+                lastImportDiv.innerHTML = `No automatic imports yet - use "Import Sessions" below to get started`;
+                lastImportDiv.style.display = 'block';
+                return;
+            }
+            const { timestamp, count } = JSON.parse(localData);
+            displayImportInfo(timestamp, count, lastImportDiv);
+            return;
+        }
+        
+        // Use data from API
+        const { timestamp, count } = data.value;
+        displayImportInfo(timestamp, count, lastImportDiv);
+    } catch (error) {
+        console.error('Error fetching last import info:', error);
+        // Fallback to localStorage
+        const localData = localStorage.getItem('lastImport');
+        if (localData) {
+            const { timestamp, count } = JSON.parse(localData);
+            displayImportInfo(timestamp, count, lastImportDiv);
+        }
     }
-    
-    const { timestamp, count } = JSON.parse(importInfo);
+}
+
+function displayImportInfo(timestamp, count, element) {
     const importDate = new Date(timestamp);
     
     // Format time as HH:MM
@@ -509,6 +536,6 @@ function displayLastImportInfo() {
     const monthStr = importDate.toLocaleDateString('en-GB', { month: 'short' });
     const dateStr = `${day}${suffix} ${monthStr}`;
     
-    lastImportDiv.innerHTML = `Last refresh at ${timeStr} on ${dateStr} - ${count} session${count !== 1 ? 's' : ''} imported`;
-    lastImportDiv.style.display = 'block';
+    element.innerHTML = `Last refresh at ${timeStr} on ${dateStr} - ${count} session${count !== 1 ? 's' : ''} imported`;
+    element.style.display = 'block';
 }

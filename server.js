@@ -406,6 +406,20 @@ app.post('/api/octopus/import', async (req, res) => {
       skipped: skippedSessions.length,
       sessions: importedSessions
     });
+    
+    // Store last import info in database
+    if (importedSessions.length > 0) {
+      try {
+        await pool.query(
+          `INSERT INTO app_settings (key, value) 
+           VALUES ('last_import', $1)
+           ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()`,
+          [JSON.stringify({ timestamp: new Date().toISOString(), count: importedSessions.length })]
+        );
+      } catch (error) {
+        console.error('Error storing last import info:', error);
+      }
+    }
   } catch (error) {
     console.error('Error importing sessions from Octopus:', error);
     res.status(500).json({ error: error.message || 'Failed to import sessions from Octopus Energy API' });
@@ -420,6 +434,28 @@ app.get('/api/octopus/status', (req, res) => {
     mpan: process.env.OCTOPUS_MPAN ? '✓ Set' : '✗ Not set',
     serial: process.env.OCTOPUS_SERIAL ? '✓ Set' : '✗ Not set'
   });
+});
+
+// Get app setting
+app.get('/api/settings/:key', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT value, updated_at FROM app_settings WHERE key = $1',
+      [req.params.key]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.json({ value: null });
+    }
+    
+    res.json({
+      value: JSON.parse(result.rows[0].value),
+      updated_at: result.rows[0].updated_at
+    });
+  } catch (error) {
+    console.error('Error getting setting:', error);
+    res.status(500).json({ error: 'Failed to get setting' });
+  }
 });
 
 // Get statistics
