@@ -54,6 +54,18 @@ async function loadSessions() {
     try {
         const response = await fetch(`${API_URL}/sessions`);
         const sessions = await response.json();
+        
+        console.log('=== Frontend Received Sessions ===');
+        console.log('Total sessions:', sessions.length);
+        if (sessions.length > 0) {
+            console.log('First session:');
+            console.log('  date:', sessions[0].date, 'Type:', typeof sessions[0].date);
+            console.log('  startTime:', sessions[0].startTime);
+            console.log('  endTime:', sessions[0].endTime);
+            console.log('  source:', sessions[0].source);
+        }
+        console.log('=== End Frontend Receive ===');
+        
         displaySessions(sessions);
     } catch (error) {
         console.error('Error loading sessions:', error);
@@ -224,11 +236,16 @@ function calculateDuration(startTime, endTime) {
 
 // Helper: Format date nicely
 function formatDate(dateString) {
+    console.log('formatDate input:', dateString, 'Type:', typeof dateString);
+    
     // Parse date in local timezone to avoid timezone shift issues
     const [year, month, day] = dateString.split('-');
     const date = new Date(year, month - 1, day);
     const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
-    return date.toLocaleDateString('en-GB', options);
+    const formatted = date.toLocaleDateString('en-GB', options);
+    
+    console.log('formatDate output:', formatted);
+    return formatted;
 }
 
 // Setup import form

@@ -56,6 +56,15 @@ app.get('/api/sessions', async (req, res) => {
       'SELECT * FROM charging_sessions ORDER BY created_at DESC'
     );
     
+    console.log(`=== Fetching ${result.rows.length} sessions from database ===`);
+    if (result.rows.length > 0) {
+      const firstSession = result.rows[0];
+      console.log('First session from DB:');
+      console.log('  date:', firstSession.date, 'Type:', typeof firstSession.date);
+      console.log('  start_time:', firstSession.start_time);
+      console.log('  end_time:', firstSession.end_time);
+    }
+    
     // Transform data to match frontend expectations (camelCase)
     const sessions = result.rows.map(session => ({
       id: session.id,
@@ -71,6 +80,8 @@ app.get('/api/sessions', async (req, res) => {
       source: session.source || 'manual',
       createdAt: session.created_at
     }));
+    
+    console.log('=== End Fetch ===');
     
     res.json(sessions);
   } catch (error) {
@@ -312,6 +323,13 @@ app.post('/api/octopus/import', async (req, res) => {
       try {
         const id = Date.now().toString() + '-' + Math.random().toString(36).substr(2, 9);
         
+        console.log('=== Inserting Session to Database ===');
+        console.log('Session date:', session.date, 'Type:', typeof session.date);
+        console.log('Session startTime:', session.startTime, 'Type:', typeof session.startTime);
+        console.log('Session endTime:', session.endTime, 'Type:', typeof session.endTime);
+        console.log('Session energy:', session.energyAdded, 'kWh');
+        console.log('Session cost:', session.cost);
+        
         const result = await pool.query(
           `INSERT INTO charging_sessions 
             (id, date, start_time, end_time, energy_added, start_soc, end_soc, tariff_rate, cost, notes, source, octopus_session_id)
@@ -334,6 +352,8 @@ app.post('/api/octopus/import', async (req, res) => {
         );
 
         const data = result.rows[0];
+        console.log('Successfully inserted! Returned date from DB:', data.date);
+        console.log('=== End Insert ===');
         importedSessions.push({
           id: data.id,
           date: data.date,
