@@ -1,0 +1,97 @@
+═══════════════════════════════════════════════════════════════════════════
+  🚀 QUICK START: GitHub Actions Manual Run
+═══════════════════════════════════════════════════════════════════════════
+
+❗ IMPORTANT: READ THIS FIRST!
+
+The GitHub Action is NOT visible yet because the workflow file is on a 
+Pull Request branch. GitHub only shows Actions from the DEFAULT BRANCH.
+
+═══════════════════════════════════════════════════════════════════════════
+  📝 WHAT YOU NEED TO DO (3 Steps)
+═══════════════════════════════════════════════════════════════════════════
+
+STEP 1: Merge the Pull Request
+  └─ Go to: https://github.com/tomkerry47/EvTracker/pulls
+  └─ Click on the open PR
+  └─ Click "Merge pull request" button (green)
+  └─ Click "Confirm merge"
+  └─ Wait 10 seconds
+
+STEP 2: Find the Action
+  └─ Go to: https://github.com/tomkerry47/EvTracker/actions
+  └─ Left sidebar: Click "Daily Charge Check"
+  └─ You should see a "Run workflow" button (blue, top right)
+
+STEP 3: Run it Manually
+  └─ Click "Run workflow" button
+  └─ Dropdown appears
+  └─ Make sure "main" is selected
+  └─ Click "Run workflow" in dropdown
+  └─ Wait 2-3 seconds for page refresh
+  └─ Watch it run!
+
+═══════════════════════════════════════════════════════════════════════════
+  ❓ WHY CAN'T I SEE IT NOW?
+═══════════════════════════════════════════════════════════════════════════
+
+GitHub Actions only appear for workflows on the DEFAULT BRANCH.
+
+Your workflow file (.github/workflows/daily-charge-check.yml) is currently
+on the PR branch: "copilot/create-charge-tracking-dashboard"
+
+Once you MERGE the PR → workflow moves to main → appears in Actions tab
+
+═══════════════════════════════════════════════════════════════════════════
+  ✅ SECRETS STATUS
+═══════════════════════════════════════════════════════════════════════════
+
+You mentioned you added the secrets - Great! ✓
+
+Verify all 4 are there:
+  └─ Settings → Secrets and variables → Actions
+  └─ Should see:
+     • DATABASE_URL
+     • OCTOPUS_API_KEY  
+     • OCTOPUS_MPAN
+     • OCTOPUS_SERIAL
+
+═══════════════════════════════════════════════════════════════════════════
+  🎯 AFTER MERGING
+═══════════════════════════════════════════════════════════════════════════
+
+Once merged, the Action will:
+  ✓ Appear in Actions tab immediately
+  ✓ Be manually runnable anytime
+  ✓ Automatically run daily at 06:00 AM UTC
+  ✓ Import last 2 days of charging data each time
+
+═══════════════════════════════════════════════════════════════════════════
+  📚 MORE HELP
+═══════════════════════════════════════════════════════════════════════════
+
+Detailed guide: FIND_GITHUB_ACTION.md
+Secret setup: HOW_TO_ADD_SECRETS.md
+
+═══════════════════════════════════════════════════════════════════════════
+  🔗 DIRECT LINKS (After Merging)
+═══════════════════════════════════════════════════════════════════════════
+
+Actions page:
+  → https://github.com/tomkerry47/EvTracker/actions
+
+Workflow (Daily Charge Check):
+  → https://github.com/tomkerry47/EvTracker/actions/workflows/daily-charge-check.yml
+
+Secrets settings:
+  → https://github.com/tomkerry47/EvTracker/settings/secrets/actions
+
+═══════════════════════════════════════════════════════════════════════════
+  💡 TL;DR
+═══════════════════════════════════════════════════════════════════════════
+
+1. Merge the PR first! ← THIS IS WHY YOU CAN'T SEE IT
+2. Then Actions tab will show "Daily Charge Check"
+3. Then you can run it manually
+
+═══════════════════════════════════════════════════════════════════════════
