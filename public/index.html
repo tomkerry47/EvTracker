@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EvTracker - Charging Session Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>⚡ EvTracker</h1>
+            <p class="subtitle">Andersen A3 Charger & Octopus Intelligent Go Tracker</p>
+        </header>
+
+        <!-- Statistics Cards -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Total Sessions</h3>
+                <p class="stat-value" id="totalSessions">0</p>
+            </div>
+            <div class="stat-card">
+                <h3>Total Energy</h3>
+                <p class="stat-value" id="totalEnergy">0 kWh</p>
+            </div>
+            <div class="stat-card">
+                <h3>Total Cost</h3>
+                <p class="stat-value" id="totalCost">£0.00</p>
+            </div>
+            <div class="stat-card">
+                <h3>Avg Energy/Session</h3>
+                <p class="stat-value" id="avgEnergy">0 kWh</p>
+            </div>
+        </div>
+
+        <!-- Manual Entry Button -->
+        <div class="manual-entry-section">
+            <button id="toggleManualEntry" class="btn btn-secondary">
+                ➕ Add Manual Entry
+            </button>
+        </div>
+
+        <!-- Add New Session Form (Initially Hidden) -->
+        <div class="form-section" id="manualEntryForm" style="display: none;">
+            <h2>Log New Charging Session Manually</h2>
+            <p class="form-description">Use this only if automatic import doesn't capture a session</p>
+            <form id="sessionForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="date">Date</label>
+                        <input type="date" id="date" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="startTime">Start Time</label>
+                        <input type="time" id="startTime" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="endTime">End Time</label>
+                        <input type="time" id="endTime" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="energyAdded">Energy Added (kWh)</label>
+                        <input type="number" id="energyAdded" step="0.1" min="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="tariffRate">Tariff Rate (p/kWh)</label>
+                        <input type="number" id="tariffRate" step="0.01" min="0" value="7.5" required>
+                        <small>Default: 7.5p (Octopus Intelligent Go off-peak)</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="cost">Cost (£)</label>
+                        <input type="number" id="cost" step="0.01" min="0" required readonly>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="notes">Notes (Optional)</label>
+                    <textarea id="notes" rows="2" placeholder="Optional notes about this session..."></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Add Session</button>
+                    <button type="button" id="cancelManualEntry" class="btn btn-secondary">Cancel</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Octopus Energy Import Section -->
+        <div class="import-section">
+            <h2>🐙 Import from Octopus Energy</h2>
+            <p class="import-description">Automatically detect charging sessions from your smart meter data</p>
+            <div class="import-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="importDateFrom">From Date</label>
+                        <input type="date" id="importDateFrom" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="importDateTo">To Date</label>
+                        <input type="date" id="importDateTo" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="importThreshold">Detection Threshold (kWh)</label>
+                        <input type="number" id="importThreshold" step="0.1" min="0.5" value="2.0" required>
+                        <small>Minimum kWh per 30min to detect charging</small>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="autoDetectRate" checked>
+                            Use Intelligent Octopus Go rate (7.5p/kWh for all EV charging)
+                        </label>
+                        <small>Uncheck to set a custom rate</small>
+                    </div>
+                    <div class="form-group" id="manualRateGroup" style="display: none;">
+                        <label for="importTariffRate">Fixed Tariff Rate (p/kWh)</label>
+                        <input type="number" id="importTariffRate" step="0.01" min="0" value="7.5">
+                    </div>
+                </div>
+                <button id="importButton" class="btn btn-import">Import Sessions</button>
+                <div id="importStatus" class="import-status"></div>
+            </div>
+        </div>
+
+        <!-- Sessions History -->
+        <div class="sessions-section">
+            <h2>Charging History</h2>
+            <div id="sessionsContainer">
+                <p class="no-sessions">No charging sessions recorded yet. Add your first session above!</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

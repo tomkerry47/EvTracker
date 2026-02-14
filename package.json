@@ -1,0 +1,25 @@
+{
+  "name": "evtracker",
+  "version": "1.0.0",
+  "description": "EV Charging Session Tracker for Andersen A3 Charger and Octopus Energy Intelligent Go",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "ev",
+    "charging",
+    "tracker",
+    "octopus",
+    "andersen"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.13.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "pg": "^8.11.3"
+  }
+}
