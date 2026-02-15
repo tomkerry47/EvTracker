@@ -49,13 +49,12 @@ async function importDailyCharges() {
     
     console.log(`📅 Importing from ${dateFrom.toISOString()} to ${dateTo.toISOString()}`);
     
-    // Import sessions with auto-detect rate (7.5p for Intelligent Octopus Go)
+    // Import sessions with auto-detect rate (pass null to use Intelligent Octopus Go rate of 7.5p)
     const result = await octopusClient.importSessions(
       dateFrom.toISOString().split('T')[0],
       dateTo.toISOString().split('T')[0],
       2.0,  // threshold (kWh)
-      0.075, // tariffRate (7.5p)
-      true  // autoDetectRate
+      null  // tariffRate (null = auto-detect 7.5p for Intelligent Octopus Go)
     );
     
     console.log('\n=== Import Results ===');
