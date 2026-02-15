@@ -72,26 +72,25 @@ async function importDailyCharges() {
         
         const query = `
           INSERT INTO charging_sessions (
-            id, date, energy_added, start_soc, end_soc, tariff_rate, cost,
-            notes, source, octopus_session_id, start_time, end_time
+            id, date, start_time, end_time, energy_added, start_soc, end_soc, 
+            tariff_rate, cost, notes, source, octopus_session_id
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-          ON CONFLICT (octopus_session_id) DO NOTHING
           RETURNING id
         `;
         
         const values = [
           id,
           session.date,
+          session.startTime,
+          session.endTime,
           session.energyAdded,
-          session.startSoc,
-          session.endSoc,
+          session.startSoC,
+          session.endSoC,
           session.tariffRate,
           session.cost,
           session.notes,
           'octopus',
-          session.octopusSessionId,
-          session.startTime,
-          session.endTime
+          session.octopusSessionId
         ];
         
         const insertResult = await pool.query(query, values);
@@ -104,7 +103,13 @@ async function importDailyCharges() {
           console.log(`  ⏭️  Skipped (duplicate): ${session.date} ${session.startTime}`);
         }
       } catch (error) {
-        console.error(`  ❌ Error importing session:`, error.message);
+        // Handle duplicate octopus_session_id
+        if (error.code === '23505') {
+          skipped++;
+          console.log(`  ⏭️  Skipped (duplicate): ${session.date} ${session.startTime}`);
+        } else {
+          console.error(`  ❌ Error importing session:`, error.message);
+        }
       }
     }
     
