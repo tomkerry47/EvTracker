@@ -106,7 +106,7 @@ async function importDailyCharges() {
   console.log(`Timestamp: ${new Date().toISOString()}`);
   
   // Validate environment variables
-  const requiredEnvVars = ['DATABASE_URL', 'OCTOPUS_API_KEY', 'OCTOPUS_MPAN', 'OCTOPUS_SERIAL'];
+  const requiredEnvVars = ['DATABASE_URL', 'OCTOPUS_API_KEY', 'OCTOPUS_MPAN', 'OCTOPUS_SERIAL', 'OCTOPUS_ACCOUNT_NUMBER'];
   const missing = requiredEnvVars.filter(varName => !process.env[varName]);
   
   if (missing.length > 0) {
@@ -129,7 +129,11 @@ async function importDailyCharges() {
     const octopusClient = new OctopusClient(
       process.env.OCTOPUS_API_KEY,
       process.env.OCTOPUS_MPAN,
-      process.env.OCTOPUS_SERIAL
+      process.env.OCTOPUS_SERIAL,
+      {
+        accountNumber: process.env.OCTOPUS_ACCOUNT_NUMBER || null,
+        graphqlToken: process.env.OCTOPUS_GRAPHQL_TOKEN || null
+      }
     );
     console.log('✅ Octopus client initialized');
     
@@ -156,6 +160,7 @@ async function importDailyCharges() {
     let imported = 0;
     let updated = 0;
     let skipped = 0;
+    let errors = 0;
     
     for (const session of result) {
       try {
@@ -256,6 +261,7 @@ async function importDailyCharges() {
           skipped++;
           console.log(`  ⏭️  Skipped (duplicate): ${session.date} ${session.startTime}`);
         } else {
+          errors++;
           console.error(`  ❌ Error importing session:`, error.message);
         }
       }
@@ -265,6 +271,7 @@ async function importDailyCharges() {
     console.log(`✅ Successfully imported (new): ${imported} sessions`);
     console.log(`♻️  Updated existing: ${updated} sessions`);
     console.log(`⏭️  Skipped (duplicates): ${skipped} sessions`);
+    console.log(`❌ Errors: ${errors}`);
     console.log(`💰 Total cost: £${result.reduce((sum, s) => sum + s.cost, 0).toFixed(2)}`);
     console.log(`⚡ Total energy: ${result.reduce((sum, s) => sum + s.energyAdded, 0).toFixed(2)} kWh`);
     
@@ -288,6 +295,10 @@ async function importDailyCharges() {
     }
     
     console.log('=== Daily Charge Import Completed ===\n');
+
+    if (errors > 0) {
+      throw new Error(`Import completed with ${errors} non-duplicate error(s)`);
+    }
     
   } catch (error) {
     console.error('❌ Import failed:', error.message);
