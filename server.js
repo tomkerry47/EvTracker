@@ -36,7 +36,11 @@ if (process.env.OCTOPUS_API_KEY && process.env.OCTOPUS_MPAN && process.env.OCTOP
   octopusClient = new OctopusEnergyClient(
     process.env.OCTOPUS_API_KEY,
     process.env.OCTOPUS_MPAN,
-    process.env.OCTOPUS_SERIAL
+    process.env.OCTOPUS_SERIAL,
+    {
+      accountNumber: process.env.OCTOPUS_ACCOUNT_NUMBER || null,
+      graphqlToken: process.env.OCTOPUS_GRAPHQL_TOKEN || null
+    }
   );
   console.log('Octopus Energy API client initialized');
 } else {
@@ -46,6 +50,113 @@ if (process.env.OCTOPUS_API_KEY && process.env.OCTOPUS_MPAN && process.env.OCTOP
 // Middleware
 app.use(express.json());
 app.use(express.static('public'));
+
+function formatUkDate(date) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/London',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(date);
+}
+
+function formatUkTime(date) {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).format(date);
+}
+
+function normalizeBlock(block, tariffRate) {
+  const charged = Math.abs(parseFloat(block?.charged_kwh ?? block?.charge_in_kwh ?? 0) || 0);
+  const cost = Number.isFinite(parseFloat(block?.cost))
+    ? parseFloat(block.cost)
+    : parseFloat(((charged * tariffRate) / 100).toFixed(2));
+  return {
+    start: block.start,
+    end: block.end,
+    charge_in_kwh: Number(block.charge_in_kwh ?? -charged),
+    charged_kwh: charged,
+    cost,
+    source: block.source || 'completed-dispatch'
+  };
+}
+
+function mergeSessionBlocks(existingSession, incomingSession, tariffRate, gapMinutes) {
+  const existingBlocks = Array.isArray(existingSession.dispatch_blocks)
+    ? existingSession.dispatch_blocks
+    : [];
+  const incomingBlocks = Array.isArray(incomingSession.dispatchBlocks)
+    ? incomingSession.dispatchBlocks
+    : [];
+
+  const allBlocks = [...existingBlocks, ...incomingBlocks]
+    .map((block) => normalizeBlock(block, tariffRate))
+    .filter((block) => block.start && block.end);
+
+  // Deduplicate by time window.
+  const dedupMap = new Map();
+  for (const block of allBlocks) {
+    dedupMap.set(`${block.start}|${block.end}`, block);
+  }
+
+  const uniqueBlocks = [...dedupMap.values()].sort((a, b) => new Date(a.start) - new Date(b.start));
+  if (!uniqueBlocks.length) {
+    return null;
+  }
+
+  // Collapse block groups using the same gap rule.
+  const mergedGroups = [];
+  for (const block of uniqueBlocks) {
+    const current = mergedGroups[mergedGroups.length - 1];
+    const start = new Date(block.start);
+    const end = new Date(block.end);
+
+    if (!current) {
+      mergedGroups.push({ start, end, blocks: [block] });
+      continue;
+    }
+
+    const gapMs = start - current.end;
+    if (gapMs <= gapMinutes * 60 * 1000) {
+      current.end = end > current.end ? end : current.end;
+      current.blocks.push(block);
+    } else {
+      mergedGroups.push({ start, end, blocks: [block] });
+    }
+  }
+
+  // Choose the group containing incoming session start/end if possible; otherwise largest energy group.
+  const incomingStart = new Date(`${incomingSession.date}T${incomingSession.startTime}:00`);
+  const incomingEnd = new Date(`${incomingSession.date}T${incomingSession.endTime}:00`);
+  const targetGroup = mergedGroups.find((group) =>
+    group.start <= incomingEnd && group.end >= incomingStart
+  ) || mergedGroups.reduce((best, group) => {
+    const groupKwh = group.blocks.reduce((sum, b) => sum + (parseFloat(b.charged_kwh) || 0), 0);
+    const bestKwh = best ? best.blocks.reduce((sum, b) => sum + (parseFloat(b.charged_kwh) || 0), 0) : -1;
+    return groupKwh > bestKwh ? group : best;
+  }, null);
+
+  if (!targetGroup) return null;
+
+  const totalKwh = targetGroup.blocks.reduce((sum, block) => sum + (parseFloat(block.charged_kwh) || 0), 0);
+  const totalCost = targetGroup.blocks.reduce((sum, block) => sum + (parseFloat(block.cost) || 0), 0);
+  const startDate = targetGroup.start;
+  const endDate = targetGroup.end;
+
+  return {
+    date: formatUkDate(startDate),
+    startTime: formatUkTime(startDate),
+    endTime: formatUkTime(endDate),
+    energyAdded: parseFloat(totalKwh.toFixed(3)),
+    cost: parseFloat(totalCost.toFixed(2)),
+    dispatchCount: targetGroup.blocks.length,
+    dispatchBlocks: targetGroup.blocks,
+    octopusSessionId: `${startDate.toISOString()}_${endDate.toISOString()}_${targetGroup.blocks.length}`
+  };
+}
 
 // API Routes
 
@@ -84,7 +195,10 @@ app.get('/api/sessions', async (req, res) => {
         cost: parseFloat(session.cost),
         notes: session.notes,
         source: session.source || 'manual',
+        vehicle: session.vehicle || null,
         octopusSessionId: session.octopus_session_id,
+        dispatchCount: session.dispatch_count || null,
+        dispatchBlocks: session.dispatch_blocks || null,
         createdAt: session.created_at
       };
     });
@@ -131,6 +245,9 @@ app.get('/api/sessions/:id', async (req, res) => {
       cost: parseFloat(data.cost),
       notes: data.notes,
       source: data.source || 'manual',
+      vehicle: data.vehicle || null,
+      dispatchCount: data.dispatch_count || null,
+      dispatchBlocks: data.dispatch_blocks || null,
       createdAt: data.created_at
     };
     
@@ -149,8 +266,8 @@ app.post('/api/sessions', async (req, res) => {
     
     const result = await pool.query(
       `INSERT INTO charging_sessions 
-        (id, date, start_time, end_time, energy_added, start_soc, end_soc, tariff_rate, cost, notes, source, octopus_session_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        (id, date, start_time, end_time, energy_added, start_soc, end_soc, tariff_rate, cost, notes, source, vehicle, octopus_session_id, dispatch_count, dispatch_blocks)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        RETURNING *`,
       [
         id,
@@ -164,7 +281,10 @@ app.post('/api/sessions', async (req, res) => {
         req.body.cost,
         req.body.notes || null,
         req.body.source || 'manual',
-        req.body.octopusSessionId || null
+        req.body.vehicle || null,
+        req.body.octopusSessionId || null,
+        req.body.dispatchCount || null,
+        req.body.dispatchBlocks ? JSON.stringify(req.body.dispatchBlocks) : null
       ]
     );
     
@@ -183,6 +303,9 @@ app.post('/api/sessions', async (req, res) => {
       cost: parseFloat(data.cost),
       notes: data.notes,
       source: data.source || 'manual',
+      vehicle: data.vehicle || null,
+      dispatchCount: data.dispatch_count || null,
+      dispatchBlocks: data.dispatch_blocks || null,
       createdAt: data.created_at
     };
     
@@ -241,6 +364,10 @@ app.put('/api/sessions/:id', async (req, res) => {
       updates.push(`notes = $${paramCount++}`);
       values.push(req.body.notes);
     }
+    if (req.body.vehicle !== undefined) {
+      updates.push(`vehicle = $${paramCount++}`);
+      values.push(req.body.vehicle);
+    }
     
     if (updates.length === 0) {
       return res.status(400).json({ error: 'No fields to update' });
@@ -274,6 +401,10 @@ app.put('/api/sessions/:id', async (req, res) => {
       tariffRate: parseFloat(data.tariff_rate),
       cost: parseFloat(data.cost),
       notes: data.notes,
+      source: data.source || 'manual',
+      vehicle: data.vehicle || null,
+      dispatchCount: data.dispatch_count || null,
+      dispatchBlocks: data.dispatch_blocks || null,
       createdAt: data.created_at
     };
     
@@ -314,7 +445,7 @@ app.post('/api/octopus/import', async (req, res) => {
       });
     }
 
-    const { dateFrom, dateTo, threshold, tariffRate, autoDetectRate } = req.body;
+    const { dateFrom, dateTo, tariffRate, autoDetectRate, mergeGapHours, accountNumber, vehicle } = req.body;
     
     // Validate inputs
     if (!dateFrom || !dateTo) {
@@ -323,26 +454,103 @@ app.post('/api/octopus/import', async (req, res) => {
 
     console.log('=== Import Request ===');
     console.log('Date range:', dateFrom, 'to', dateTo);
-    console.log('Threshold:', threshold || 2.0, 'kWh');
+    console.log('Merge gap:', mergeGapHours || 4, 'hours');
     console.log('Tariff rate:', tariffRate || 'auto-detect');
     console.log('Auto-detect rate:', autoDetectRate);
 
-    // Import sessions from Octopus
-    // Pass null for tariffRate if auto-detection is enabled
-    const effectiveTariffRate = autoDetectRate ? null : (tariffRate || 7.5);
-    const sessions = await octopusClient.importSessions(
-      dateFrom, 
-      dateTo, 
-      threshold || 2.0, 
-      effectiveTariffRate
-    );
+    // Import sessions from completedDispatches GraphQL.
+    const effectiveTariffRate = autoDetectRate ? octopusClient.getIntelligentOctopusChargingRate() : (tariffRate || 7.0);
+    const parsedGapHours = Number(mergeGapHours);
+    const gapHours = Number.isFinite(parsedGapHours) && parsedGapHours >= 0 ? parsedGapHours : 4;
+    const gapMinutes = gapHours * 60;
+    const sessions = await octopusClient.importSessionsFromCompletedDispatches({
+      dateFrom,
+      dateTo,
+      tariffRate: effectiveTariffRate,
+      gapMinutes,
+      accountNumber: accountNumber || undefined,
+      vehicle: vehicle || null
+    });
 
     // Insert sessions into database
     const importedSessions = [];
+    let updated = 0;
     const skippedSessions = [];
 
     for (const session of sessions) {
       try {
+        const incomingStartTs = `${session.date} ${session.startTime}:00`;
+        const incomingEndTs = `${session.date} ${session.endTime}:00`;
+        const existingResult = await pool.query(
+          `SELECT * FROM charging_sessions
+           WHERE source = 'octopus-graphql'
+             AND (vehicle IS NOT DISTINCT FROM $3)
+             AND (CAST(date::text || ' ' || start_time::text AS timestamp) <= $2::timestamp + ($4::text || ' minutes')::interval)
+             AND (CAST(date::text || ' ' || end_time::text AS timestamp) >= $1::timestamp - ($4::text || ' minutes')::interval)
+           ORDER BY date DESC, start_time DESC
+           LIMIT 1`,
+          [incomingStartTs, incomingEndTs, session.vehicle || null, gapMinutes]
+        );
+
+        if (existingResult.rows.length > 0) {
+          const existing = existingResult.rows[0];
+          const merged = mergeSessionBlocks(existing, session, session.tariffRate, gapMinutes);
+
+          if (merged) {
+            const updateResult = await pool.query(
+              `UPDATE charging_sessions
+               SET date = $1,
+                   start_time = $2,
+                   end_time = $3,
+                   energy_added = $4,
+                   tariff_rate = $5,
+                   cost = $6,
+                   source = $7,
+                   vehicle = $8,
+                   octopus_session_id = $9,
+                   dispatch_count = $10,
+                   dispatch_blocks = $11
+               WHERE id = $12
+               RETURNING *`,
+              [
+                merged.date,
+                merged.startTime,
+                merged.endTime,
+                merged.energyAdded,
+                session.tariffRate,
+                merged.cost,
+                'octopus-graphql',
+                existing.vehicle || session.vehicle || null,
+                merged.octopusSessionId,
+                merged.dispatchCount,
+                JSON.stringify(merged.dispatchBlocks),
+                existing.id
+              ]
+            );
+
+            const data = updateResult.rows[0];
+            importedSessions.push({
+              id: data.id,
+              date: data.date,
+              startTime: data.start_time,
+              endTime: data.end_time,
+              energyAdded: parseFloat(data.energy_added),
+              startSoC: data.start_soc,
+              endSoC: data.end_soc,
+              tariffRate: parseFloat(data.tariff_rate),
+              cost: parseFloat(data.cost),
+              notes: data.notes,
+              source: data.source,
+              vehicle: data.vehicle || null,
+              dispatchCount: data.dispatch_count || null,
+              dispatchBlocks: data.dispatch_blocks || null,
+              createdAt: data.created_at
+            });
+            updated++;
+            continue;
+          }
+        }
+
         const id = Date.now().toString() + '-' + Math.random().toString(36).substr(2, 9);
         
         console.log('=== Inserting Session to Database ===');
@@ -354,8 +562,8 @@ app.post('/api/octopus/import', async (req, res) => {
         
         const result = await pool.query(
           `INSERT INTO charging_sessions 
-            (id, date, start_time, end_time, energy_added, start_soc, end_soc, tariff_rate, cost, notes, source, octopus_session_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            (id, date, start_time, end_time, energy_added, start_soc, end_soc, tariff_rate, cost, notes, source, vehicle, octopus_session_id, dispatch_count, dispatch_blocks)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
            RETURNING *`,
           [
             id,
@@ -369,7 +577,10 @@ app.post('/api/octopus/import', async (req, res) => {
             session.cost,
             session.notes,
             session.source,
-            session.octopusSessionId
+            session.vehicle || null,
+            session.octopusSessionId,
+            session.dispatchCount || null,
+            session.dispatchBlocks ? JSON.stringify(session.dispatchBlocks) : null
           ]
         );
 
@@ -388,6 +599,9 @@ app.post('/api/octopus/import', async (req, res) => {
           cost: parseFloat(data.cost),
           notes: data.notes,
           source: data.source,
+          vehicle: data.vehicle || null,
+          dispatchCount: data.dispatch_count || null,
+          dispatchBlocks: data.dispatch_blocks || null,
           createdAt: data.created_at
         });
       } catch (error) {
@@ -402,7 +616,10 @@ app.post('/api/octopus/import', async (req, res) => {
 
     res.json({
       success: true,
+      mode: 'completed-dispatches-graphql',
+      detected: sessions.length,
       imported: importedSessions.length,
+      updated,
       skipped: skippedSessions.length,
       sessions: importedSessions
     });
@@ -416,6 +633,7 @@ app.post('/api/octopus/import', async (req, res) => {
         [JSON.stringify({ 
           timestamp: new Date().toISOString(), 
           count: importedSessions.length,
+          updated: updated,
           total_detected: sessions.length,
           skipped: skippedSessions.length
         })]
@@ -429,13 +647,120 @@ app.post('/api/octopus/import', async (req, res) => {
   }
 });
 
+// Get dispatch-like charging intervals from Octopus consumption for testing/preview
+app.get('/api/octopus/dispatch-candidates', async (req, res) => {
+  try {
+    if (!octopusClient) {
+      return res.status(503).json({
+        error: 'Octopus Energy API not configured. Please set OCTOPUS_API_KEY, OCTOPUS_MPAN, and OCTOPUS_SERIAL environment variables.'
+      });
+    }
+
+    const { dateFrom, dateTo, threshold } = req.query;
+    const parsedThreshold = parseFloat(threshold || '2.0');
+
+    if (!dateFrom || !dateTo) {
+      return res.status(400).json({ error: 'dateFrom and dateTo are required (YYYY-MM-DD).' });
+    }
+
+    if (Number.isNaN(parsedThreshold) || parsedThreshold < 0) {
+      return res.status(400).json({ error: 'threshold must be a number greater than or equal to 0.' });
+    }
+
+    const dispatches = await octopusClient.getDispatchCandidates(dateFrom, dateTo, parsedThreshold);
+
+    res.json({
+      count: dispatches.length,
+      dateFrom,
+      dateTo,
+      threshold: parsedThreshold,
+      dispatches
+    });
+  } catch (error) {
+    console.error('Error fetching dispatch candidates from Octopus:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch Octopus dispatch candidates' });
+  }
+});
+
+// Get completed Intelligent dispatches from Octopus GraphQL
+app.get('/api/octopus/completed-dispatches', async (req, res) => {
+  try {
+    if (!octopusClient) {
+      return res.status(503).json({
+        error: 'Octopus Energy API not configured. Please set OCTOPUS_API_KEY, OCTOPUS_MPAN, and OCTOPUS_SERIAL environment variables.'
+      });
+    }
+
+    const { accountNumber, dateFrom, dateTo } = req.query;
+    let dispatches;
+    try {
+      dispatches = await octopusClient.getCompletedDispatches({
+        accountNumber: accountNumber || undefined,
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined
+      });
+    } catch (initialError) {
+      // If no token has been configured, try authenticating via API key once.
+      if (String(initialError.message || '').includes('Missing GraphQL token')) {
+        const tokenResult = await octopusClient.obtainKrakenToken();
+        octopusClient.graphqlToken = tokenResult.token;
+        dispatches = await octopusClient.getCompletedDispatches({
+          accountNumber: accountNumber || undefined,
+          dateFrom: dateFrom || undefined,
+          dateTo: dateTo || undefined
+        });
+      } else {
+        throw initialError;
+      }
+    }
+
+    res.json({
+      count: dispatches.length,
+      source: 'octopus-graphql-completed-dispatches',
+      dateFrom: dateFrom || null,
+      dateTo: dateTo || null,
+      dispatches
+    });
+  } catch (error) {
+    console.error('Error fetching completed dispatches from Octopus GraphQL:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch completed dispatches' });
+  }
+});
+
+// Authenticate to Octopus GraphQL using API key and cache token in-memory
+app.post('/api/octopus/graphql/auth', async (req, res) => {
+  try {
+    if (!octopusClient) {
+      return res.status(503).json({
+        error: 'Octopus Energy API not configured. Please set OCTOPUS_API_KEY, OCTOPUS_MPAN, and OCTOPUS_SERIAL environment variables.'
+      });
+    }
+
+    const result = await octopusClient.obtainKrakenToken();
+    octopusClient.graphqlToken = result.token;
+
+    const tokenPreview = `${result.token.slice(0, 10)}...${result.token.slice(-6)}`;
+    res.json({
+      success: true,
+      tokenPreview,
+      refreshExpiresIn: result.refreshExpiresIn || null
+    });
+  } catch (error) {
+    console.error('Error authenticating with Octopus GraphQL:', error);
+    res.status(500).json({ error: error.message || 'Failed to authenticate with Octopus GraphQL' });
+  }
+});
+
 // Check if Octopus API is configured
 app.get('/api/octopus/status', (req, res) => {
   res.json({
     configured: octopusClient !== null,
     apiKey: process.env.OCTOPUS_API_KEY ? '✓ Set' : '✗ Not set',
     mpan: process.env.OCTOPUS_MPAN ? '✓ Set' : '✗ Not set',
-    serial: process.env.OCTOPUS_SERIAL ? '✓ Set' : '✗ Not set'
+    serial: process.env.OCTOPUS_SERIAL ? '✓ Set' : '✗ Not set',
+    accountNumber: process.env.OCTOPUS_ACCOUNT_NUMBER ? '✓ Set' : '✗ Not set',
+    graphqlToken: process.env.OCTOPUS_GRAPHQL_TOKEN ? '✓ Set' : '✗ Not set',
+    graphqlTokenInMemory: octopusClient?.graphqlToken ? '✓ Set' : '✗ Not set'
   });
 });
 

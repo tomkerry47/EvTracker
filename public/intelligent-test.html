@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EvTracker - Intelligent Charging Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container live-intelligent-page">
+        <header class="live-header">
+            <h1>Intelligent Charging Dashboard</h1>
+            <p class="subtitle">Octopus completed dispatches grouped into EV charging sessions</p>
+        </header>
+
+        <section class="sessions-section live-controls">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="octopusAccountNumber">Account number (optional)</label>
+                    <input id="octopusAccountNumber" type="text" placeholder="A-XXXXXXXX">
+                </div>
+                <div class="form-group">
+                    <label for="octopusDateFrom">From date</label>
+                    <input id="octopusDateFrom" type="date">
+                </div>
+                <div class="form-group">
+                    <label for="octopusDateTo">To date</label>
+                    <input id="octopusDateTo" type="date">
+                </div>
+                <div class="form-group">
+                    <label for="tariffPence">Tariff (p/kWh)</label>
+                    <input id="tariffPence" type="number" step="0.01" min="0" value="7.5">
+                </div>
+            </div>
+            <div class="action-buttons-inline">
+                <button id="authGraphql" class="btn btn-secondary">Authenticate GraphQL</button>
+                <button id="loadCompletedDispatches" class="btn btn-primary">Refresh Dispatches</button>
+            </div>
+            <p class="form-note">Session rule: if the gap between blocks is less than 4 hours, they are grouped into one charging session.</p>
+            <div id="errorMessage" class="import-status error-message" style="display:none;"></div>
+        </section>
+
+        <section class="sessions-section">
+            <div class="stats-grid compact-grid">
+                <div class="stat-card">
+                    <h3>Dispatch Blocks</h3>
+                    <p class="stat-value" id="dispatchCount">0</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Charge Sessions</h3>
+                    <p class="stat-value" id="sessionCount">0</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Energy Charged</h3>
+                    <p class="stat-value" id="totalKwh">0 kWh</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Estimated Cost</h3>
+                    <p class="stat-value" id="totalCostEstimate">£0.00</p>
+                </div>
+            </div>
+            <div class="form-row focus-row">
+                <div class="form-group">
+                    <label for="focusDate">Focus date</label>
+                    <input id="focusDate" type="date">
+                </div>
+                <div class="form-group">
+                    <label>Daily highlight</label>
+                    <div id="focusSummary" class="focus-summary">No data loaded yet.</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="sessions-section">
+            <div class="session-view-header">
+                <h2>Charging Sessions</h2>
+                <span class="session-policy">Grouped by &lt; 4h block gap</span>
+            </div>
+            <div id="mergedSessionsContainer">
+                <p class="no-sessions">Authenticate and refresh dispatches to load sessions.</p>
+            </div>
+        </section>
+
+        <section class="sessions-section">
+            <details class="raw-data-panel">
+                <summary>Raw dispatch JSON</summary>
+                <div class="form-group">
+                    <textarea id="dispatchJson" rows="10"></textarea>
+                </div>
+            </details>
+        </section>
+    </div>
+
+    <script src="intelligent-test.js"></script>
+</body>
+</html>

@@ -14,7 +14,10 @@ CREATE TABLE IF NOT EXISTS charging_sessions (
   cost DECIMAL(10, 2) NOT NULL,
   notes TEXT,
   source VARCHAR(50) DEFAULT 'manual',
+  vehicle VARCHAR(64),
   octopus_session_id VARCHAR(255),
+  dispatch_count INTEGER,
+  dispatch_blocks JSONB,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

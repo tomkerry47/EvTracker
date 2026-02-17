@@ -71,9 +71,18 @@
                         <input type="number" id="energyAdded" step="0.1" min="0" required>
                     </div>
                     <div class="form-group">
+                        <label for="vehicle">Vehicle</label>
+                        <input type="hidden" id="vehicle" value="Kia EV5">
+                        <div class="pill-group" data-target-input="vehicle">
+                            <button type="button" class="pill-btn active" data-value="Kia EV5">Kia EV5</button>
+                            <button type="button" class="pill-btn" data-value="Peugeot E-2008">Peugeot E-2008</button>
+                            <button type="button" class="pill-btn" data-value="Other">Other</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
                         <label for="tariffRate">Tariff Rate (p/kWh)</label>
-                        <input type="number" id="tariffRate" step="0.01" min="0" value="7.5" required>
-                        <small>Default: 7.5p (Octopus Intelligent Go off-peak)</small>
+                        <input type="number" id="tariffRate" step="0.01" min="0" value="7.0" required>
+                        <small>Default: 7.0p (Octopus Intelligent Go off-peak)</small>
                     </div>
                     <div class="form-group">
                         <label for="cost">Cost (£)</label>
@@ -99,9 +108,14 @@
                     <h2>🐙 Import from Octopus Energy</h2>
                     <span class="close" data-modal="importModal">&times;</span>
                 </div>
-                <p class="import-description">Automatically detect charging sessions from your smart meter data</p>
+                <p class="import-description">Import completed dispatches and merge them into sessions</p>
                 <div class="import-form">
                 <div class="form-row">
+                    <div class="form-group">
+                        <label for="importAccountNumber">Account Number (Optional)</label>
+                        <input type="text" id="importAccountNumber" placeholder="A-XXXXXXXX">
+                        <small>Leave blank to use the server account setting</small>
+                    </div>
                     <div class="form-group">
                         <label for="importDateFrom">From Date</label>
                         <input type="date" id="importDateFrom" required>
@@ -111,22 +125,22 @@
                         <input type="date" id="importDateTo" required>
                     </div>
                     <div class="form-group">
-                        <label for="importThreshold">Detection Threshold (kWh)</label>
-                        <input type="number" id="importThreshold" step="0.1" min="0.5" value="2.0" required>
-                        <small>Minimum kWh per 30min to detect charging</small>
+                        <label for="importMergeGapHours">Merge Gap (hours)</label>
+                        <input type="number" id="importMergeGapHours" step="1" min="0" value="4" required>
+                        <small>Blocks under this gap are grouped into one session</small>
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
                         <label>
                             <input type="checkbox" id="autoDetectRate" checked>
-                            Use Intelligent Octopus Go rate (7.5p/kWh for all EV charging)
+                            Use Intelligent Octopus Go rate (7.0p/kWh for all EV charging)
                         </label>
                         <small>Uncheck to set a custom rate</small>
                     </div>
                     <div class="form-group" id="manualRateGroup" style="display: none;">
                         <label for="importTariffRate">Fixed Tariff Rate (p/kWh)</label>
-                        <input type="number" id="importTariffRate" step="0.01" min="0" value="7.5">
+                        <input type="number" id="importTariffRate" step="0.01" min="0" value="7.0">
                     </div>
                 </div>
                 <button id="importButton" class="btn btn-import">Import Sessions</button>
@@ -144,6 +158,16 @@
                     <button class="filter-btn" data-filter="7">7 Days</button>
                     <button class="filter-btn" data-filter="30">30 Days</button>
                     <button class="filter-btn" data-filter="90">90 Days</button>
+                </div>
+                <div class="form-group vehicle-filter-group">
+                    <label for="vehicleFilter">Vehicle</label>
+                    <input type="hidden" id="vehicleFilter" value="all">
+                    <div class="pill-group filter-pills" data-target-input="vehicleFilter">
+                        <button type="button" class="pill-btn active" data-value="all">All</button>
+                        <button type="button" class="pill-btn" data-value="Kia EV5">Kia EV5</button>
+                        <button type="button" class="pill-btn" data-value="Peugeot E-2008">Peugeot E-2008</button>
+                        <button type="button" class="pill-btn" data-value="Other">Other</button>
+                    </div>
                 </div>
             </div>
             <div id="lastImportInfo" class="last-import-info"></div>

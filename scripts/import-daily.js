@@ -1,14 +1,105 @@
 #!/usr/bin/env node
 
 /**
- * Daily Charge Import Script
+ * Automated Charge Import Script
  * 
- * Automatically imports the last 2 days of charging data from Octopus Energy API
- * Runs via GitHub Actions at 06:00 AM daily
+ * Imports recent completed dispatches from Octopus GraphQL and merges them
+ * into charge sessions using a 4-hour block-gap rule.
  */
 
 const { Pool } = require('pg');
 const OctopusClient = require('../lib/octopus-client');
+
+function formatUkDate(date) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/London',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(date);
+}
+
+function formatUkTime(date) {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).format(date);
+}
+
+function normalizeBlock(block, tariffRate) {
+  const charged = Math.abs(parseFloat(block?.charged_kwh ?? block?.charge_in_kwh ?? 0) || 0);
+  const cost = Number.isFinite(parseFloat(block?.cost))
+    ? parseFloat(block.cost)
+    : parseFloat(((charged * tariffRate) / 100).toFixed(2));
+  return {
+    start: block.start,
+    end: block.end,
+    charge_in_kwh: Number(block.charge_in_kwh ?? -charged),
+    charged_kwh: charged,
+    cost,
+    source: block.source || 'completed-dispatch'
+  };
+}
+
+function mergeSessionBlocks(existingSession, incomingSession, tariffRate, gapMinutes) {
+  const existingBlocks = Array.isArray(existingSession.dispatch_blocks) ? existingSession.dispatch_blocks : [];
+  const incomingBlocks = Array.isArray(incomingSession.dispatchBlocks) ? incomingSession.dispatchBlocks : [];
+  const allBlocks = [...existingBlocks, ...incomingBlocks]
+    .map((block) => normalizeBlock(block, tariffRate))
+    .filter((block) => block.start && block.end);
+
+  const dedupMap = new Map();
+  for (const block of allBlocks) {
+    dedupMap.set(`${block.start}|${block.end}`, block);
+  }
+
+  const uniqueBlocks = [...dedupMap.values()].sort((a, b) => new Date(a.start) - new Date(b.start));
+  if (!uniqueBlocks.length) return null;
+
+  const mergedGroups = [];
+  for (const block of uniqueBlocks) {
+    const current = mergedGroups[mergedGroups.length - 1];
+    const start = new Date(block.start);
+    const end = new Date(block.end);
+    if (!current) {
+      mergedGroups.push({ start, end, blocks: [block] });
+      continue;
+    }
+    const gapMs = start - current.end;
+    if (gapMs <= gapMinutes * 60 * 1000) {
+      current.end = end > current.end ? end : current.end;
+      current.blocks.push(block);
+    } else {
+      mergedGroups.push({ start, end, blocks: [block] });
+    }
+  }
+
+  const incomingStart = new Date(`${incomingSession.date}T${incomingSession.startTime}:00`);
+  const incomingEnd = new Date(`${incomingSession.date}T${incomingSession.endTime}:00`);
+  const targetGroup = mergedGroups.find((group) =>
+    group.start <= incomingEnd && group.end >= incomingStart
+  ) || mergedGroups[0];
+
+  if (!targetGroup) return null;
+
+  const totalKwh = targetGroup.blocks.reduce((sum, block) => sum + (parseFloat(block.charged_kwh) || 0), 0);
+  const totalCost = targetGroup.blocks.reduce((sum, block) => sum + (parseFloat(block.cost) || 0), 0);
+  const startDate = targetGroup.start;
+  const endDate = targetGroup.end;
+
+  return {
+    date: formatUkDate(startDate),
+    startTime: formatUkTime(startDate),
+    endTime: formatUkTime(endDate),
+    energyAdded: parseFloat(totalKwh.toFixed(3)),
+    cost: parseFloat(totalCost.toFixed(2)),
+    dispatchCount: targetGroup.blocks.length,
+    dispatchBlocks: targetGroup.blocks,
+    octopusSessionId: `${startDate.toISOString()}_${endDate.toISOString()}_${targetGroup.blocks.length}`
+  };
+}
 
 async function importDailyCharges() {
   console.log('=== Daily Charge Import Started ===');
@@ -42,38 +133,93 @@ async function importDailyCharges() {
     );
     console.log('✅ Octopus client initialized');
     
-    // Calculate date range (last 2 days)
+    // Calculate date range (last 3 days to handle completedDispatches lag safely)
     const dateTo = new Date();
     const dateFrom = new Date();
-    dateFrom.setDate(dateFrom.getDate() - 2);
+    dateFrom.setDate(dateFrom.getDate() - 3);
     
     console.log(`📅 Importing from ${dateFrom.toISOString()} to ${dateTo.toISOString()}`);
     
-    // Import sessions with auto-detect rate (pass null to use Intelligent Octopus Go rate of 7.5p)
-    const result = await octopusClient.importSessions(
-      dateFrom.toISOString().split('T')[0],
-      dateTo.toISOString().split('T')[0],
-      2.0,  // threshold (kWh)
-      null  // tariffRate (null = auto-detect 7.5p for Intelligent Octopus Go)
-    );
+    const result = await octopusClient.importSessionsFromCompletedDispatches({
+      dateFrom: dateFrom.toISOString().split('T')[0],
+      dateTo: dateTo.toISOString().split('T')[0],
+      tariffRate: octopusClient.getIntelligentOctopusChargingRate(),
+      gapMinutes: 240,
+      accountNumber: process.env.OCTOPUS_ACCOUNT_NUMBER || undefined,
+      vehicle: process.env.DEFAULT_VEHICLE || null
+    });
     
     console.log('\n=== Import Results ===');
     console.log(`✅ Sessions detected: ${result.length}`);
     
     // Insert sessions into database
     let imported = 0;
+    let updated = 0;
     let skipped = 0;
     
     for (const session of result) {
       try {
+        const gapMinutes = 240;
+        const incomingStartTs = `${session.date} ${session.startTime}:00`;
+        const incomingEndTs = `${session.date} ${session.endTime}:00`;
+        const existingResult = await pool.query(
+          `SELECT * FROM charging_sessions
+           WHERE source = 'octopus-graphql'
+             AND (vehicle IS NOT DISTINCT FROM $3)
+             AND (CAST(date::text || ' ' || start_time::text AS timestamp) <= $2::timestamp + ($4::text || ' minutes')::interval)
+             AND (CAST(date::text || ' ' || end_time::text AS timestamp) >= $1::timestamp - ($4::text || ' minutes')::interval)
+           ORDER BY date DESC, start_time DESC
+           LIMIT 1`,
+          [incomingStartTs, incomingEndTs, session.vehicle || null, gapMinutes]
+        );
+
+        if (existingResult.rows.length > 0) {
+          const existing = existingResult.rows[0];
+          const merged = mergeSessionBlocks(existing, session, session.tariffRate, gapMinutes);
+          if (merged) {
+            await pool.query(
+              `UPDATE charging_sessions
+               SET date = $1,
+                   start_time = $2,
+                   end_time = $3,
+                   energy_added = $4,
+                   tariff_rate = $5,
+                   cost = $6,
+                   source = $7,
+                   vehicle = $8,
+                   octopus_session_id = $9,
+                   dispatch_count = $10,
+                   dispatch_blocks = $11
+               WHERE id = $12`,
+              [
+                merged.date,
+                merged.startTime,
+                merged.endTime,
+                merged.energyAdded,
+                session.tariffRate,
+                merged.cost,
+                'octopus-graphql',
+                existing.vehicle || session.vehicle || null,
+                merged.octopusSessionId,
+                merged.dispatchCount,
+                JSON.stringify(merged.dispatchBlocks),
+                existing.id
+              ]
+            );
+            updated++;
+            console.log(`  ♻️  Updated: ${merged.date} ${merged.startTime} - ${merged.energyAdded} kWh`);
+            continue;
+          }
+        }
+
         // Generate unique ID using timestamp + random suffix to prevent collisions
         const id = Date.now().toString() + '-' + Math.random().toString(36).slice(2, 11);
         
         const query = `
           INSERT INTO charging_sessions (
             id, date, start_time, end_time, energy_added, start_soc, end_soc, 
-            tariff_rate, cost, notes, source, octopus_session_id
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            tariff_rate, cost, notes, source, vehicle, octopus_session_id, dispatch_count, dispatch_blocks
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
           RETURNING id
         `;
         
@@ -88,8 +234,11 @@ async function importDailyCharges() {
           session.tariffRate,
           session.cost,
           session.notes,
-          'octopus',
-          session.octopusSessionId
+          session.source || 'octopus-graphql',
+          session.vehicle || null,
+          session.octopusSessionId,
+          session.dispatchCount || null,
+          session.dispatchBlocks ? JSON.stringify(session.dispatchBlocks) : null
         ];
         
         const insertResult = await pool.query(query, values);
@@ -113,7 +262,8 @@ async function importDailyCharges() {
     }
     
     console.log('\n=== Summary ===');
-    console.log(`✅ Successfully imported: ${imported} sessions`);
+    console.log(`✅ Successfully imported (new): ${imported} sessions`);
+    console.log(`♻️  Updated existing: ${updated} sessions`);
     console.log(`⏭️  Skipped (duplicates): ${skipped} sessions`);
     console.log(`💰 Total cost: £${result.reduce((sum, s) => sum + s.cost, 0).toFixed(2)}`);
     console.log(`⚡ Total energy: ${result.reduce((sum, s) => sum + s.energyAdded, 0).toFixed(2)} kWh`);
@@ -127,6 +277,7 @@ async function importDailyCharges() {
         [JSON.stringify({ 
           timestamp: new Date().toISOString(), 
           count: imported,
+          updated: updated,
           total_detected: result.length,
           skipped: skipped
         })]

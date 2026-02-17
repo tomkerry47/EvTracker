@@ -2,8 +2,8 @@ name: Daily Charge Check
 
 on:
   schedule:
-    # Run every 2 hours
-    - cron: '0 */2 * * *'
+    # Run hourly
+    - cron: '0 * * * *'
   workflow_dispatch:  # Allow manual triggering
 
 jobs:
@@ -22,12 +22,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
       
-      - name: Import last 2 days of charging data
+      - name: Import recent completed dispatch sessions
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           OCTOPUS_API_KEY: ${{ secrets.OCTOPUS_API_KEY }}
           OCTOPUS_MPAN: ${{ secrets.OCTOPUS_MPAN }}
           OCTOPUS_SERIAL: ${{ secrets.OCTOPUS_SERIAL }}
+          OCTOPUS_ACCOUNT_NUMBER: ${{ secrets.OCTOPUS_ACCOUNT_NUMBER }}
+          DEFAULT_VEHICLE: ${{ secrets.DEFAULT_VEHICLE }}
         run: node scripts/import-daily.js
       
       - name: Report results
