@@ -568,7 +568,10 @@ header h1 {
 
 .detail-item {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
 .detail-label {
@@ -577,7 +580,7 @@ header h1 {
     font-weight: 500;
     text-transform: none;
     letter-spacing: 0;
-    margin-bottom: 4px;
+    margin-bottom: 0;
 }
 
 .detail-value {
@@ -680,16 +683,38 @@ header h1 {
     }
 
     .session-header {
-        align-items: flex-start;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        grid-template-areas:
+            "date delete"
+            "pills pills";
+        align-items: start;
+        gap: 8px 10px;
+    }
+
+    .session-date {
+        grid-area: date;
+        display: flex;
         flex-wrap: wrap;
-        gap: 8px;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .session-header .btn-danger {
+        grid-area: delete;
+        align-self: start;
     }
 
     .session-vehicle-pills {
+        grid-area: pills;
         margin-left: 0;
         margin-right: 0;
         width: 100%;
         justify-content: flex-start;
+    }
+
+    .session-source {
+        margin-left: 0;
     }
     
     .detail-label {
@@ -769,7 +794,7 @@ header h1 {
         width: 100%;
         justify-content: flex-start;
         gap: 5px;
-        margin-top: 4px;
+        margin-top: 2px;
     }
 
     .session-pill-btn {
