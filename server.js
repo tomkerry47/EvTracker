@@ -490,7 +490,7 @@ app.post('/api/octopus/import', async (req, res) => {
         const incomingEndTs = `${sessionDateOnly} ${session.endTime}:00`;
         const existingResult = await pool.query(
           `SELECT * FROM charging_sessions
-           WHERE source = 'octopus-graphql'
+           WHERE source LIKE 'octopus%'
              AND (CAST(CAST(date AS date)::text || ' ' || start_time::text AS timestamp) <= $2::timestamp + ($3::text || ' minutes')::interval)
              AND (CAST(CAST(date AS date)::text || ' ' || end_time::text AS timestamp) >= $1::timestamp - ($3::text || ' minutes')::interval)
            ORDER BY date DESC, start_time DESC
