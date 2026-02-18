@@ -715,6 +715,89 @@ header h1 {
     }
 }
 
+@media (max-width: 480px) {
+    body {
+        padding: 8px;
+        padding-bottom: 68px;
+    }
+
+    .form-section, .sessions-section {
+        padding: 14px;
+        border-radius: 14px;
+        margin-bottom: 14px;
+    }
+
+    .sessions-header {
+        gap: 8px;
+    }
+
+    .filter-buttons {
+        width: 100%;
+        gap: 6px;
+    }
+
+    .filter-btn {
+        padding: 6px 10px;
+        font-size: 0.78em;
+    }
+
+    .vehicle-filter-group {
+        width: 100%;
+        min-width: 0;
+        margin-left: 0;
+    }
+
+    .pill-group {
+        gap: 6px;
+    }
+
+    .pill-btn {
+        padding: 6px 10px;
+        font-size: 0.78em;
+    }
+
+    .session-card {
+        padding: 12px;
+    }
+
+    .session-date {
+        font-size: 1em;
+        line-height: 1.25;
+    }
+
+    .session-vehicle-pills {
+        width: 100%;
+        justify-content: flex-start;
+        gap: 5px;
+        margin-top: 4px;
+    }
+
+    .session-pill-btn {
+        padding: 5px 8px;
+        font-size: 0.74em;
+    }
+
+    .session-details {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+
+    .dispatch-graph {
+        padding: 8px;
+    }
+
+    .dispatch-bar-row {
+        grid-template-columns: 88px 1fr 112px;
+        gap: 8px;
+        margin-bottom: 6px;
+    }
+
+    .dispatch-bar-label,
+    .dispatch-bar-kwh {
+        font-size: 0.74em;
+    }
+}
+
 /* Import Form Styles (used in modal) */
 .import-form {
     margin-top: 0;

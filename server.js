@@ -484,19 +484,28 @@ app.post('/api/octopus/import', async (req, res) => {
         const existingResult = await pool.query(
           `SELECT * FROM charging_sessions
            WHERE source = 'octopus-graphql'
-             AND (vehicle IS NOT DISTINCT FROM $3)
-             AND (CAST(date::text || ' ' || start_time::text AS timestamp) <= $2::timestamp + ($4::text || ' minutes')::interval)
-             AND (CAST(date::text || ' ' || end_time::text AS timestamp) >= $1::timestamp - ($4::text || ' minutes')::interval)
+             AND (CAST(date::text || ' ' || start_time::text AS timestamp) <= $2::timestamp + ($3::text || ' minutes')::interval)
+             AND (CAST(date::text || ' ' || end_time::text AS timestamp) >= $1::timestamp - ($3::text || ' minutes')::interval)
            ORDER BY date DESC, start_time DESC
-           LIMIT 1`,
-          [incomingStartTs, incomingEndTs, session.vehicle || null, gapMinutes]
+          `,
+          [incomingStartTs, incomingEndTs, gapMinutes]
         );
 
         if (existingResult.rows.length > 0) {
-          const existing = existingResult.rows[0];
-          const merged = mergeSessionBlocks(existing, session, session.tariffRate, gapMinutes);
+          let merged = { ...session };
+          // Fold all overlapping candidates into one merged payload.
+          for (const existing of existingResult.rows) {
+            const nextMerged = mergeSessionBlocks(existing, merged, session.tariffRate, gapMinutes);
+            if (nextMerged) {
+              merged = {
+                ...merged,
+                ...nextMerged
+              };
+            }
+          }
 
           if (merged) {
+            const keepRow = existingResult.rows[0];
             const updateResult = await pool.query(
               `UPDATE charging_sessions
                SET date = $1,
@@ -520,13 +529,24 @@ app.post('/api/octopus/import', async (req, res) => {
                 session.tariffRate,
                 merged.cost,
                 'octopus-graphql',
-                existing.vehicle || session.vehicle || null,
+                keepRow.vehicle || session.vehicle || null,
                 merged.octopusSessionId,
                 merged.dispatchCount,
                 JSON.stringify(merged.dispatchBlocks),
-                existing.id
+                keepRow.id
               ]
             );
+
+            // Remove other overlapping rows that are now subsumed by the merged row.
+            const extraIds = existingResult.rows
+              .map((row) => row.id)
+              .filter((id) => id !== keepRow.id);
+            if (extraIds.length > 0) {
+              await pool.query(
+                `DELETE FROM charging_sessions WHERE id = ANY($1::text[])`,
+                [extraIds]
+              );
+            }
 
             const data = updateResult.rows[0];
             importedSessions.push({

@@ -161,6 +161,7 @@ async function importDailyCharges() {
     let updated = 0;
     let skipped = 0;
     let errors = 0;
+    const errorSamples = [];
     
     for (const session of result) {
       try {
@@ -170,18 +171,23 @@ async function importDailyCharges() {
         const existingResult = await pool.query(
           `SELECT * FROM charging_sessions
            WHERE source = 'octopus-graphql'
-             AND (vehicle IS NOT DISTINCT FROM $3)
-             AND (CAST(date::text || ' ' || start_time::text AS timestamp) <= $2::timestamp + ($4::text || ' minutes')::interval)
-             AND (CAST(date::text || ' ' || end_time::text AS timestamp) >= $1::timestamp - ($4::text || ' minutes')::interval)
+             AND (CAST(date::text || ' ' || start_time::text AS timestamp) <= $2::timestamp + ($3::text || ' minutes')::interval)
+             AND (CAST(date::text || ' ' || end_time::text AS timestamp) >= $1::timestamp - ($3::text || ' minutes')::interval)
            ORDER BY date DESC, start_time DESC
-           LIMIT 1`,
-          [incomingStartTs, incomingEndTs, session.vehicle || null, gapMinutes]
+          `,
+          [incomingStartTs, incomingEndTs, gapMinutes]
         );
 
         if (existingResult.rows.length > 0) {
-          const existing = existingResult.rows[0];
-          const merged = mergeSessionBlocks(existing, session, session.tariffRate, gapMinutes);
+          let merged = { ...session };
+          for (const existing of existingResult.rows) {
+            const nextMerged = mergeSessionBlocks(existing, merged, session.tariffRate, gapMinutes);
+            if (nextMerged) {
+              merged = { ...merged, ...nextMerged };
+            }
+          }
           if (merged) {
+            const keepRow = existingResult.rows[0];
             await pool.query(
               `UPDATE charging_sessions
                SET date = $1,
@@ -204,13 +210,22 @@ async function importDailyCharges() {
                 session.tariffRate,
                 merged.cost,
                 'octopus-graphql',
-                existing.vehicle || session.vehicle || null,
+                keepRow.vehicle || session.vehicle || null,
                 merged.octopusSessionId,
                 merged.dispatchCount,
                 JSON.stringify(merged.dispatchBlocks),
-                existing.id
+                keepRow.id
               ]
             );
+            const extraIds = existingResult.rows
+              .map((row) => row.id)
+              .filter((id) => id !== keepRow.id);
+            if (extraIds.length > 0) {
+              await pool.query(
+                `DELETE FROM charging_sessions WHERE id = ANY($1::text[])`,
+                [extraIds]
+              );
+            }
             updated++;
             console.log(`  ♻️  Updated: ${merged.date} ${merged.startTime} - ${merged.energyAdded} kWh`);
             continue;
@@ -262,7 +277,15 @@ async function importDailyCharges() {
           console.log(`  ⏭️  Skipped (duplicate): ${session.date} ${session.startTime}`);
         } else {
           errors++;
-          console.error(`  ❌ Error importing session:`, error.message);
+          const errorSummary = `${error.code || 'NO_CODE'}: ${error.message}`;
+          errorSamples.push(errorSummary);
+          console.error(`  ❌ Error importing session: ${errorSummary}`);
+          if (error.detail) {
+            console.error(`     detail: ${error.detail}`);
+          }
+          if (error.hint) {
+            console.error(`     hint: ${error.hint}`);
+          }
         }
       }
     }
@@ -272,6 +295,9 @@ async function importDailyCharges() {
     console.log(`♻️  Updated existing: ${updated} sessions`);
     console.log(`⏭️  Skipped (duplicates): ${skipped} sessions`);
     console.log(`❌ Errors: ${errors}`);
+    if (errorSamples.length > 0) {
+      console.log(`❌ Error samples: ${errorSamples.slice(0, 3).join(' | ')}`);
+    }
     console.log(`💰 Total cost: £${result.reduce((sum, s) => sum + s.cost, 0).toFixed(2)}`);
     console.log(`⚡ Total energy: ${result.reduce((sum, s) => sum + s.energyAdded, 0).toFixed(2)} kWh`);
     
