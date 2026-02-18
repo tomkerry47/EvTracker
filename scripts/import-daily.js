@@ -43,6 +43,12 @@ function normalizeBlock(block, tariffRate) {
   };
 }
 
+function toIsoDateOnly(value) {
+  if (!value) return value;
+  const text = String(value);
+  return text.length >= 10 ? text.slice(0, 10) : text;
+}
+
 function mergeSessionBlocks(existingSession, incomingSession, tariffRate, gapMinutes) {
   const existingBlocks = Array.isArray(existingSession.dispatch_blocks) ? existingSession.dispatch_blocks : [];
   const incomingBlocks = Array.isArray(incomingSession.dispatchBlocks) ? incomingSession.dispatchBlocks : [];
@@ -166,13 +172,14 @@ async function importDailyCharges() {
     for (const session of result) {
       try {
         const gapMinutes = 240;
-        const incomingStartTs = `${session.date} ${session.startTime}:00`;
-        const incomingEndTs = `${session.date} ${session.endTime}:00`;
+        const sessionDateOnly = toIsoDateOnly(session.date);
+        const incomingStartTs = `${sessionDateOnly} ${session.startTime}:00`;
+        const incomingEndTs = `${sessionDateOnly} ${session.endTime}:00`;
         const existingResult = await pool.query(
           `SELECT * FROM charging_sessions
            WHERE source = 'octopus-graphql'
-             AND (CAST(date::text || ' ' || start_time::text AS timestamp) <= $2::timestamp + ($3::text || ' minutes')::interval)
-             AND (CAST(date::text || ' ' || end_time::text AS timestamp) >= $1::timestamp - ($3::text || ' minutes')::interval)
+             AND (CAST(CAST(date AS date)::text || ' ' || start_time::text AS timestamp) <= $2::timestamp + ($3::text || ' minutes')::interval)
+             AND (CAST(CAST(date AS date)::text || ' ' || end_time::text AS timestamp) >= $1::timestamp - ($3::text || ' minutes')::interval)
            ORDER BY date DESC, start_time DESC
           `,
           [incomingStartTs, incomingEndTs, gapMinutes]
