@@ -49,6 +49,22 @@ function toIsoDateOnly(value) {
   return text.length >= 10 ? text.slice(0, 10) : text;
 }
 
+function addDaysToIsoDate(dateStr, days) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10);
+}
+
+function getSessionWindowStrings(session) {
+  const dateOnly = toIsoDateOnly(session.date);
+  const start = `${dateOnly} ${session.startTime}:00`;
+  const isOvernight = session.endTime <= session.startTime;
+  const endDate = isOvernight ? addDaysToIsoDate(dateOnly, 1) : dateOnly;
+  const end = `${endDate} ${session.endTime}:00`;
+  return { start, end };
+}
+
 function mergeSessionBlocks(existingSession, incomingSession, tariffRate, gapMinutes) {
   const existingBlocks = Array.isArray(existingSession.dispatch_blocks) ? existingSession.dispatch_blocks : [];
   const incomingBlocks = Array.isArray(incomingSession.dispatchBlocks) ? incomingSession.dispatchBlocks : [];
@@ -84,6 +100,9 @@ function mergeSessionBlocks(existingSession, incomingSession, tariffRate, gapMin
 
   const incomingStart = new Date(`${incomingSession.date}T${incomingSession.startTime}:00`);
   const incomingEnd = new Date(`${incomingSession.date}T${incomingSession.endTime}:00`);
+  if (incomingEnd <= incomingStart) {
+    incomingEnd.setDate(incomingEnd.getDate() + 1);
+  }
   const targetGroup = mergedGroups.find((group) =>
     group.start <= incomingEnd && group.end >= incomingStart
   ) || mergedGroups[0];
@@ -172,14 +191,17 @@ async function importDailyCharges() {
     for (const session of result) {
       try {
         const gapMinutes = 240;
-        const sessionDateOnly = toIsoDateOnly(session.date);
-        const incomingStartTs = `${sessionDateOnly} ${session.startTime}:00`;
-        const incomingEndTs = `${sessionDateOnly} ${session.endTime}:00`;
+        const { start: incomingStartTs, end: incomingEndTs } = getSessionWindowStrings(session);
         const existingResult = await pool.query(
           `SELECT * FROM charging_sessions
            WHERE source LIKE 'octopus%'
              AND (CAST(CAST(date AS date)::text || ' ' || start_time::text AS timestamp) <= $2::timestamp + ($3::text || ' minutes')::interval)
-             AND (CAST(CAST(date AS date)::text || ' ' || end_time::text AS timestamp) >= $1::timestamp - ($3::text || ' minutes')::interval)
+             AND (
+               CASE
+                 WHEN end_time < start_time THEN CAST(CAST(date AS date)::text || ' ' || end_time::text AS timestamp) + interval '1 day'
+                 ELSE CAST(CAST(date AS date)::text || ' ' || end_time::text AS timestamp)
+               END
+             ) >= $1::timestamp - ($3::text || ' minutes')::interval
            ORDER BY date DESC, start_time DESC
           `,
           [incomingStartTs, incomingEndTs, gapMinutes]
