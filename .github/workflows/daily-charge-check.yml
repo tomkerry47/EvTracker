@@ -21,6 +21,22 @@ jobs:
       
       - name: Install dependencies
         run: npm ci
+
+      - name: Validate required secrets
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OCTOPUS_API_KEY: ${{ secrets.OCTOPUS_API_KEY }}
+          OCTOPUS_MPAN: ${{ secrets.OCTOPUS_MPAN }}
+          OCTOPUS_SERIAL: ${{ secrets.OCTOPUS_SERIAL }}
+          OCTOPUS_ACCOUNT_NUMBER: ${{ secrets.OCTOPUS_ACCOUNT_NUMBER }}
+        run: |
+          node -e "const req=['DATABASE_URL','OCTOPUS_API_KEY','OCTOPUS_MPAN','OCTOPUS_SERIAL','OCTOPUS_ACCOUNT_NUMBER'];const miss=req.filter(k=>!process.env[k]);if(miss.length){console.error('Missing required secrets:',miss.join(', '));process.exit(1)};console.log('Required secrets present')"
+
+      - name: Validate DB schema columns
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          node -e "const {Pool}=require('pg');(async()=>{const p=new Pool({connectionString:process.env.DATABASE_URL,ssl:{rejectUnauthorized:false}});try{const r=await p.query(\"SELECT column_name FROM information_schema.columns WHERE table_name='charging_sessions'\");const cols=new Set(r.rows.map(x=>x.column_name));const need=['vehicle','dispatch_count','dispatch_blocks'];const missing=need.filter(c=>!cols.has(c));if(missing.length){console.error('Missing DB columns:',missing.join(', '));process.exit(1)};console.log('Required DB columns present')}finally{await p.end()}})().catch(e=>{console.error(e.message);process.exit(1)})"
       
       - name: Import recent completed dispatch sessions
         env:
