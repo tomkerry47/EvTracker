@@ -1227,19 +1227,6 @@ header h1 {
     font-size: 0.9em;
 }
 
-/* Build/version marker */
-.app-version {
-    position: fixed;
-    left: 12px;
-    bottom: 10px;
-    color: #9BA8BC;
-    font-size: 0.68em;
-    font-weight: 600;
-    letter-spacing: 0.2px;
-    z-index: 900;
-    pointer-events: none;
-}
-
 /* Mobile + large phones: use FAB actions instead of bottom full-width buttons */
 @media (max-width: 768px) {
     .desktop-actions {
@@ -1301,12 +1288,6 @@ header h1 {
 }
 
 @media (max-width: 480px) {
-    .app-version {
-        left: 10px;
-        bottom: 8px;
-        font-size: 0.64em;
-    }
-
     .filter-buttons .filter-btn,
     .filter-pills .pill-btn {
         min-height: 34px;

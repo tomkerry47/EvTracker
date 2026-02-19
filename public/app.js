@@ -5,7 +5,6 @@ const API_URL = '/api';
 document.addEventListener('DOMContentLoaded', () => {
     loadSessions();
     loadStats();
-    loadAppVersion();
     setupForm();
     setDefaultDate();
     setupCostCalculation();
@@ -17,22 +16,6 @@ document.addEventListener('DOMContentLoaded', () => {
     setupMobileFab();
     displayLastImportInfo();
 });
-
-async function loadAppVersion() {
-    const versionEl = document.getElementById('appVersion');
-    if (!versionEl) return;
-    try {
-        const response = await fetch(`${API_URL}/version`);
-        if (!response.ok) throw new Error('Failed to load version');
-        const data = await response.json();
-        const version = data.version || '0.0.0';
-        const build = data.build || 'dev';
-        versionEl.textContent = `v${version}+${build}`;
-        versionEl.title = `Build ${data.buildFull || build}`;
-    } catch (error) {
-        versionEl.textContent = 'vdev';
-    }
-}
 
 // Setup filter buttons
 function setupFilterButtons() {
