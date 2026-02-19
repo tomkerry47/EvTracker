@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupAutoDetectRateToggle();
     setupFilterButtons();
     setupVehicleFilter();
+    setupMobileFab();
     displayLastImportInfo();
 });
 
@@ -512,25 +513,21 @@ function setupModals() {
     const manualModal = document.getElementById('manualEntryModal');
     const importModal = document.getElementById('importModal');
     
-    // Get buttons
-    const openManualBtn = document.getElementById('openManualEntryModal');
-    const openImportBtn = document.getElementById('openImportModal');
-    
     // Get close buttons
     const closeBtns = document.querySelectorAll('.close');
     const cancelBtns = document.querySelectorAll('.btn-cancel');
     
-    // Open modals
-    openManualBtn.addEventListener('click', () => {
-        manualModal.style.display = 'flex';
-        setDefaultDate();
-        document.body.style.overflow = 'hidden'; // Prevent background scroll
-    });
-    
-    openImportBtn.addEventListener('click', () => {
-        importModal.style.display = 'flex';
-        setDefaultDate(); // Set import dates
-        document.body.style.overflow = 'hidden';
+    // Open modals from generic triggers
+    document.querySelectorAll('[data-open-modal]').forEach(trigger => {
+        trigger.addEventListener('click', () => {
+            const modalId = trigger.dataset.openModal;
+            const modal = document.getElementById(modalId);
+            if (!modal) return;
+            modal.style.display = 'flex';
+            setDefaultDate();
+            document.body.style.overflow = 'hidden';
+            closeMobileFab();
+        });
     });
     
     // Close modal function
@@ -569,6 +566,33 @@ function setupModals() {
             closeModal(e.target);
         }
     });
+}
+
+function setupMobileFab() {
+    const toggle = document.getElementById('mobileFabToggle');
+    const menu = document.getElementById('mobileFabMenu');
+    if (!toggle || !menu) return;
+
+    toggle.addEventListener('click', () => {
+        const isOpen = menu.classList.toggle('open');
+        toggle.classList.toggle('open', isOpen);
+        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.mobile-fab-wrap')) {
+            closeMobileFab();
+        }
+    });
+}
+
+function closeMobileFab() {
+    const toggle = document.getElementById('mobileFabToggle');
+    const menu = document.getElementById('mobileFabMenu');
+    if (!toggle || !menu) return;
+    menu.classList.remove('open');
+    toggle.classList.remove('open');
+    toggle.setAttribute('aria-expanded', 'false');
 }
 
 // Setup auto-detect rate toggle

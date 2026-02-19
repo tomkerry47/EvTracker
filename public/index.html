@@ -33,13 +33,22 @@
         </div>
 
         <!-- Action Buttons for Mobile -->
-        <div class="action-buttons">
-            <button id="openManualEntryModal" class="btn btn-primary">
+        <div class="action-buttons desktop-actions">
+            <button data-open-modal="manualEntryModal" class="btn btn-primary">
                 ➕ Manual Entry
             </button>
-            <button id="openImportModal" class="btn btn-secondary">
+            <button data-open-modal="importModal" class="btn btn-secondary">
                 🐙 Import Sessions
             </button>
+        </div>
+        <div class="mobile-fab-wrap">
+            <button id="mobileFabToggle" class="mobile-fab-toggle" aria-expanded="false" aria-label="Open quick actions">
+                +
+            </button>
+            <div id="mobileFabMenu" class="mobile-fab-menu">
+                <button data-open-modal="manualEntryModal" class="btn btn-primary">Manual Entry</button>
+                <button data-open-modal="importModal" class="btn btn-secondary">Import Sessions</button>
+            </div>
         </div>
 
         <!-- Manual Entry Modal -->
