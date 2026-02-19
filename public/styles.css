@@ -110,6 +110,20 @@ header h1 {
     margin-bottom: 0;
 }
 
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.filter-group-label {
+    margin: 0;
+    color: #111111;
+    font-weight: 500;
+    font-size: 0.95em;
+    line-height: 1.2;
+}
+
 .filter-buttons {
     display: flex;
     gap: 8px;
@@ -665,6 +679,10 @@ header h1 {
         font-size: 1.4em;
         margin-bottom: 0;
     }
+
+    .filter-group-label {
+        font-size: 0.9em;
+    }
     
     .modal-content {
         padding: 20px;
@@ -781,6 +799,11 @@ header h1 {
     }
 
     .vehicle-filter-group label {
+        font-size: 0.9em;
+        margin-bottom: 6px;
+    }
+
+    .filter-group-label {
         font-size: 0.9em;
         margin-bottom: 6px;
     }
@@ -1194,4 +1217,138 @@ header h1 {
 #autoDetectRate {
     margin-right: 8px;
     cursor: pointer;
+}
+
+/* Unified filter sizing */
+.filter-buttons .filter-btn,
+.filter-pills .pill-btn {
+    min-height: 40px;
+    padding: 8px 14px;
+    font-size: 0.9em;
+}
+
+/* Build/version marker */
+.app-version {
+    position: fixed;
+    left: 12px;
+    bottom: 10px;
+    color: #9BA8BC;
+    font-size: 0.68em;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    z-index: 900;
+    pointer-events: none;
+}
+
+/* Mobile + large phones: use FAB actions instead of bottom full-width buttons */
+@media (max-width: 768px) {
+    .desktop-actions {
+        display: none !important;
+    }
+
+    .mobile-fab-wrap {
+        display: block;
+        position: fixed;
+        right: 12px;
+        bottom: 12px;
+        z-index: 1100;
+    }
+
+    .mobile-fab-toggle {
+        width: 46px;
+        height: 46px;
+        border: none;
+        border-radius: 50%;
+        background: #4A90E2;
+        color: #fff;
+        font-size: 1.8em;
+        line-height: 1;
+        cursor: pointer;
+        box-shadow: 0 8px 20px rgba(74, 144, 226, 0.35);
+        transition: transform 0.2s ease;
+    }
+
+    .mobile-fab-toggle.open {
+        transform: rotate(45deg);
+    }
+
+    .mobile-fab-menu {
+        position: absolute;
+        right: 0;
+        bottom: 56px;
+        display: none;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 170px;
+        background: white;
+        border: 1px solid #E5E5E5;
+        border-radius: 12px;
+        padding: 8px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
+    }
+
+    .mobile-fab-menu.open {
+        display: flex;
+    }
+
+    .mobile-fab-menu .btn {
+        width: 100%;
+        min-height: 34px;
+        border-radius: 10px;
+        padding: 8px 10px;
+        font-size: 0.82em;
+    }
+}
+
+@media (max-width: 480px) {
+    .app-version {
+        left: 10px;
+        bottom: 8px;
+        font-size: 0.64em;
+    }
+
+    .filter-buttons .filter-btn,
+    .filter-pills .pill-btn {
+        min-height: 34px;
+        padding: 6px 10px;
+        font-size: 0.78em;
+    }
+}
+
+/* Keep date + vehicle filters visually consistent on phones/tablets */
+@media (max-width: 768px) {
+    .sessions-header .filter-buttons,
+    .sessions-header .filter-pills {
+        width: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-start;
+        gap: 8px;
+    }
+
+    .sessions-header .filter-buttons .filter-btn,
+    .sessions-header .filter-pills .pill-btn {
+        flex: 0 0 auto;
+        min-width: 86px;
+        min-height: 38px;
+        padding: 7px 14px;
+        font-size: 0.86em;
+        text-align: center;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .sessions-header .filter-buttons,
+    .sessions-header .filter-pills {
+        gap: 6px;
+    }
+
+    .sessions-header .filter-buttons .filter-btn,
+    .sessions-header .filter-pills .pill-btn {
+        min-width: 78px;
+        min-height: 34px;
+        padding: 6px 10px;
+        font-size: 0.8em;
+    }
 }

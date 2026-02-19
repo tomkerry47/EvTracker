@@ -3,9 +3,14 @@ const express = require('express');
 const { Pool } = require('pg');
 const axios = require('axios');
 const OctopusEnergyClient = require('./lib/octopus-client');
+const { version: packageVersion } = require('./package.json');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const appBuildId = process.env.APP_BUILD
+  || process.env.VERCEL_GIT_COMMIT_SHA
+  || process.env.GITHUB_SHA
+  || 'dev';
 
 // Initialize PostgreSQL connection pool
 const databaseUrl = process.env.DATABASE_URL;
@@ -213,6 +218,15 @@ async function sendImportNotifications(payload) {
 }
 
 // API Routes
+app.get('/api/version', (req, res) => {
+  const build = String(appBuildId);
+  const shortBuild = build.length > 12 ? build.slice(0, 7) : build;
+  res.json({
+    version: packageVersion,
+    build: shortBuild,
+    buildFull: build
+  });
+});
 
 // Get all charging sessions
 app.get('/api/sessions', async (req, res) => {
