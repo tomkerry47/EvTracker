@@ -817,15 +817,29 @@ header h1 {
     }
 
     .session-header .btn-danger {
-        width: 42px;
-        height: 42px;
-        min-width: 42px;
-        padding: 0;
-        border-radius: 50%;
+        width: auto;
+        height: auto;
+        min-width: 0;
+        padding: 5px 10px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: #fff3f3;
+        color: #d64545;
+        border: 1px solid #f3b1b1;
+        box-shadow: none;
     }
 
     .session-header .btn-danger .delete-icon {
-        font-size: 1.2em;
+        display: none;
+    }
+
+    .session-header .btn-danger .delete-text {
+        display: inline;
+        font-size: 0.75em;
+        font-weight: 700;
+        letter-spacing: 0.2px;
     }
 
     .session-vehicle-pills {

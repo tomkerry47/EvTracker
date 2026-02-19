@@ -8,6 +8,7 @@
  */
 
 const { Pool } = require('pg');
+const axios = require('axios');
 const OctopusClient = require('../lib/octopus-client');
 
 function formatUkDate(date) {
@@ -124,6 +125,135 @@ function mergeSessionBlocks(existingSession, incomingSession, tariffRate, gapMin
     dispatchBlocks: targetGroup.blocks,
     octopusSessionId: `${startDate.toISOString()}_${endDate.toISOString()}_${targetGroup.blocks.length}`
   };
+}
+
+async function sendImportNotifications(payload) {
+  const targets = [
+    { name: 'Pipedream', url: process.env.PIPEDREAM_WEBHOOK_URL },
+    { name: 'Pushcut', url: process.env.PUSHCUT_WEBHOOK_URL || process.env.PUSHCUT_NOTIFICATION_URL }
+  ].filter((target) => target.url);
+
+  if (!targets.length) return;
+
+  const title = 'EvTracker: New charging session';
+  const text = `${payload.inserted} new session(s), ${payload.updated} updated, ${payload.detected} detected`;
+
+  for (const target of targets) {
+    try {
+      await axios.post(target.url, {
+        title,
+        text,
+        source: 'evtracker-scheduled',
+        ...payload
+      }, { timeout: 10000 });
+      console.log(`✅ Notification sent to ${target.name}`);
+    } catch (error) {
+      console.error(`⚠️  Failed to send ${target.name} notification: ${error.message}`);
+    }
+  }
+}
+
+function getLondonDateString(date = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/London',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(date);
+}
+
+function getLondonHour(date = new Date()) {
+  return Number(new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London',
+    hour: '2-digit',
+    hour12: false
+  }).format(date));
+}
+
+function getLondonMinute(date = new Date()) {
+  return Number(new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London',
+    minute: '2-digit'
+  }).format(date));
+}
+
+function calculateSessionDurationMinutes(session) {
+  const blocks = Array.isArray(session.dispatchBlocks) ? session.dispatchBlocks : [];
+  if (blocks.length > 0) {
+    return blocks.reduce((sum, block) => {
+      const start = new Date(block.start);
+      const end = new Date(block.end);
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return sum;
+      return sum + Math.max(0, Math.round((end - start) / 60000));
+    }, 0);
+  }
+
+  const [sh, sm] = String(session.startTime || '00:00').split(':').map(Number);
+  const [eh, em] = String(session.endTime || '00:00').split(':').map(Number);
+  let startMinutes = (sh || 0) * 60 + (sm || 0);
+  let endMinutes = (eh || 0) * 60 + (em || 0);
+  if (endMinutes < startMinutes) endMinutes += 24 * 60;
+  return Math.max(0, endMinutes - startMinutes);
+}
+
+function durationLabel(minutes) {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${h}h ${m}m`;
+}
+
+function isOvernightSession(session, londonYesterday, londonToday) {
+  const start = String(session.startTime || '00:00').slice(0, 5);
+  const end = String(session.endTime || '00:00').slice(0, 5);
+  const date = String(session.date || '').slice(0, 10);
+  const crossesMidnight = end <= start;
+  const lateEvening = date === londonYesterday && start >= '22:00';
+  const earlyMorning = date === londonToday && end <= '07:00';
+  const overnightCross = date === londonYesterday && crossesMidnight;
+  return lateEvening || earlyMorning || overnightCross;
+}
+
+async function sendOvernightPipedreamNotification(sessions) {
+  const url = process.env.PIPEDREAM_WEBHOOK_URL;
+  if (!url) return;
+
+  const now = new Date();
+  const londonHour = getLondonHour(now);
+  const londonMinute = getLondonMinute(now);
+  const inWindow = londonHour === 7 && londonMinute < 60;
+  if (!inWindow) return;
+
+  const londonToday = getLondonDateString(now);
+  const yesterdayDate = new Date(now);
+  yesterdayDate.setUTCDate(yesterdayDate.getUTCDate() - 1);
+  const londonYesterday = getLondonDateString(yesterdayDate);
+
+  const overnight = (sessions || []).filter((session) =>
+    isOvernightSession(session, londonYesterday, londonToday)
+  );
+
+  if (overnight.length === 0) return;
+
+  const baseUrl = process.env.APP_BASE_URL || process.env.PUBLIC_APP_URL || '';
+  const sessionLines = overnight.map((session) => {
+    const mins = calculateSessionDurationMinutes(session);
+    const cost = Number(session.cost || 0).toFixed(2);
+    const energy = Number(session.energyAdded || 0).toFixed(2);
+    const vehicle = session.vehicle || 'Unassigned';
+    return `${session.startTime}-${session.endTime} | ${durationLabel(mins)} | ${energy}kWh | £${cost} | ${vehicle}`;
+  });
+
+  const payload = {
+    title: 'EvTracker Overnight Charging Summary',
+    text: `Overnight sessions found: ${overnight.length}`,
+    source: 'evtracker-scheduled',
+    date: londonToday,
+    sessions: sessionLines,
+    url: baseUrl
+  };
+
+  await axios.post(url, payload, { timeout: 10000 });
+  console.log('✅ Overnight summary sent to Pipedream');
 }
 
 async function importDailyCharges() {
@@ -329,6 +459,18 @@ async function importDailyCharges() {
     }
     console.log(`💰 Total cost: £${result.reduce((sum, s) => sum + s.cost, 0).toFixed(2)}`);
     console.log(`⚡ Total energy: ${result.reduce((sum, s) => sum + s.energyAdded, 0).toFixed(2)} kWh`);
+
+    if (imported > 0) {
+      await sendImportNotifications({
+        inserted: imported,
+        updated,
+        detected: result.length,
+        skipped,
+        dateFrom: dateFrom.toISOString().split('T')[0],
+        dateTo: dateTo.toISOString().split('T')[0]
+      });
+    }
+    await sendOvernightPipedreamNotification(result);
     
     // Store last import info in database (always, even if no new sessions)
     try {

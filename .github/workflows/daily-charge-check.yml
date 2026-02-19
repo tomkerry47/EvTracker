@@ -46,6 +46,9 @@ jobs:
           OCTOPUS_SERIAL: ${{ secrets.OCTOPUS_SERIAL }}
           OCTOPUS_ACCOUNT_NUMBER: ${{ secrets.OCTOPUS_ACCOUNT_NUMBER }}
           DEFAULT_VEHICLE: ${{ secrets.DEFAULT_VEHICLE }}
+          PIPEDREAM_WEBHOOK_URL: ${{ secrets.PIPEDREAM_WEBHOOK_URL }}
+          PUSHCUT_WEBHOOK_URL: ${{ secrets.PUSHCUT_WEBHOOK_URL }}
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
         run: node scripts/import-daily.js
       
       - name: Report results

@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const { Pool } = require('pg');
+const axios = require('axios');
 const OctopusEnergyClient = require('./lib/octopus-client');
 
 const app = express();
@@ -181,6 +182,34 @@ function mergeSessionBlocks(existingSession, incomingSession, tariffRate, gapMin
     dispatchBlocks: targetGroup.blocks,
     octopusSessionId: `${startDate.toISOString()}_${endDate.toISOString()}_${targetGroup.blocks.length}`
   };
+}
+
+async function sendImportNotifications(payload) {
+  const targets = [
+    { name: 'Pipedream', url: process.env.PIPEDREAM_WEBHOOK_URL },
+    { name: 'Pushcut', url: process.env.PUSHCUT_WEBHOOK_URL || process.env.PUSHCUT_NOTIFICATION_URL }
+  ].filter((target) => target.url);
+
+  if (!targets.length) return;
+
+  const title = 'EvTracker: New charging session';
+  const text = `${payload.inserted} new session(s), ${payload.updated} updated, ${payload.detected} detected`;
+
+  for (const target of targets) {
+    try {
+      await axios.post(target.url, {
+        title,
+        text,
+        source: 'evtracker',
+        ...payload
+      }, {
+        timeout: 10000
+      });
+      console.log(`Notification sent to ${target.name}`);
+    } catch (error) {
+      console.error(`Failed to send ${target.name} notification:`, error.message);
+    }
+  }
 }
 
 // API Routes
@@ -661,6 +690,19 @@ app.post('/api/octopus/import', async (req, res) => {
           throw error;
         }
       }
+    }
+
+    const inserted = Math.max(0, importedSessions.length - updated);
+
+    if (inserted > 0) {
+      await sendImportNotifications({
+        inserted,
+        updated,
+        detected: sessions.length,
+        skipped: skippedSessions.length,
+        dateFrom,
+        dateTo
+      });
     }
 
     res.json({
