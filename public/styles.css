@@ -816,6 +816,10 @@ header h1 {
         margin-left: 0;
     }
 
+    .session-date .session-source {
+        display: none;
+    }
+
     .session-header .btn-danger {
         width: auto;
         height: auto;
@@ -891,6 +895,17 @@ header h1 {
 
     .dispatch-bar-kwh {
         text-align: right;
+    }
+
+    .action-buttons {
+        padding: 8px 10px;
+        gap: 8px;
+    }
+
+    .action-buttons .btn {
+        padding: 7px 10px;
+        font-size: 0.76em;
+        border-radius: 10px;
     }
 }
 
