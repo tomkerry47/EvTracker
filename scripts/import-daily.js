@@ -127,32 +127,6 @@ function mergeSessionBlocks(existingSession, incomingSession, tariffRate, gapMin
   };
 }
 
-async function sendImportNotifications(payload) {
-  const targets = [
-    { name: 'Pipedream', url: process.env.PIPEDREAM_WEBHOOK_URL },
-    { name: 'Pushcut', url: process.env.PUSHCUT_WEBHOOK_URL || process.env.PUSHCUT_NOTIFICATION_URL }
-  ].filter((target) => target.url);
-
-  if (!targets.length) return;
-
-  const title = 'EvTracker: New charging session';
-  const text = `${payload.inserted} new session(s), ${payload.updated} updated, ${payload.detected} detected`;
-
-  for (const target of targets) {
-    try {
-      await axios.post(target.url, {
-        title,
-        text,
-        source: 'evtracker-scheduled',
-        ...payload
-      }, { timeout: 10000 });
-      console.log(`✅ Notification sent to ${target.name}`);
-    } catch (error) {
-      console.error(`⚠️  Failed to send ${target.name} notification: ${error.message}`);
-    }
-  }
-}
-
 function getLondonDateString(date = new Date()) {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Europe/London',
@@ -460,16 +434,6 @@ async function importDailyCharges() {
     console.log(`💰 Total cost: £${result.reduce((sum, s) => sum + s.cost, 0).toFixed(2)}`);
     console.log(`⚡ Total energy: ${result.reduce((sum, s) => sum + s.energyAdded, 0).toFixed(2)} kWh`);
 
-    if (imported > 0) {
-      await sendImportNotifications({
-        inserted: imported,
-        updated,
-        detected: result.length,
-        skipped,
-        dateFrom: dateFrom.toISOString().split('T')[0],
-        dateTo: dateTo.toISOString().split('T')[0]
-      });
-    }
     await sendOvernightPipedreamNotification(result);
     
     // Store last import info in database (always, even if no new sessions)
