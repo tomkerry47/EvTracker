@@ -58,6 +58,14 @@
                     <h3>Estimated Cost</h3>
                     <p class="stat-value" id="totalCostEstimate">£0.00</p>
                 </div>
+                <div class="stat-card">
+                    <h3>Avg Charge Speed</h3>
+                    <p class="stat-value" id="avgKw">0.00 kW</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Peak Block Speed</h3>
+                    <p class="stat-value" id="peakKw">0.00 kW</p>
+                </div>
             </div>
             <div class="form-row focus-row">
                 <div class="form-group">
@@ -86,6 +94,12 @@
                 <summary>Raw dispatch JSON</summary>
                 <div class="form-group">
                     <textarea id="dispatchJson" rows="10"></textarea>
+                </div>
+            </details>
+            <details class="raw-data-panel">
+                <summary>Meta field explorer</summary>
+                <div class="form-group">
+                    <textarea id="metaSummary" rows="8" readonly></textarea>
                 </div>
             </details>
         </section>

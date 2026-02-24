@@ -124,9 +124,9 @@ function extractDispatchArray(parsed) {
 }
 
 function normalizeDispatch(item) {
-  const startRaw = item.start || item.start_time;
-  const endRaw = item.end || item.end_time;
-  const kwhRaw = item.charge_in_kwh ?? item.kwh ?? item.energy_added;
+  const startRaw = item.startDt || item.start || item.start_time;
+  const endRaw = item.endDt || item.end || item.end_time;
+  const kwhRaw = item.deltaKwh ?? item.charge_in_kwh ?? item.kwh ?? item.energy_added;
 
   const startDate = new Date(startRaw);
   const endDate = new Date(endRaw);
@@ -139,11 +139,19 @@ function normalizeDispatch(item) {
     return null;
   }
 
+  const durationHours = Math.max(0, (endDate - startDate) / (1000 * 60 * 60));
+  const kw = durationHours > 0 ? Math.abs(kwh) / durationHours : 0;
+
   return {
     start: startDate,
     end: endDate,
     chargeInKwh: Math.abs(kwh),
     rawDeltaKwh: kwh,
+    durationHours,
+    kw,
+    rawDelta: item.delta ?? null,
+    rawMeta: item.meta ?? null,
+    accountNumber: item.accountNumber ?? null,
     source: item.source || "unknown",
     location: item.location || "unknown"
   };
@@ -178,7 +186,21 @@ function mergeDispatchesIntoSessions(dispatches, gapMinutes, tariffPence) {
 
   return sessions.map((session, index) => {
     const durationMs = session.end - session.start;
+    const computedChargingHours = session.dispatches.reduce((sum, d) => sum + d.durationHours, 0);
+    const chargingHours = session.dispatchCount > 0
+      ? session.dispatchCount * 0.5
+      : computedChargingHours;
     const cost = (session.totalKwh * tariffPence) / 100;
+    const avgKw = chargingHours > 0 ? session.totalKwh / chargingHours : 0;
+    const peakKw = session.dispatches.reduce((max, d) => Math.max(max, d.kw || 0), 0);
+    const accountNumbers = Array.from(new Set(session.dispatches.map((d) => d.accountNumber).filter(Boolean)));
+    const metaKeys = Array.from(
+      new Set(
+        session.dispatches
+          .flatMap((d) => (d.rawMeta && typeof d.rawMeta === "object" ? Object.keys(d.rawMeta) : []))
+      )
+    );
+
     return {
       id: index + 1,
       date: formatDateOnly(session.start),
@@ -188,9 +210,14 @@ function mergeDispatchesIntoSessions(dispatches, gapMinutes, tariffPence) {
       endIso: session.end.toISOString(),
       totalKwh: session.totalKwh,
       durationHours: durationMs / (1000 * 60 * 60),
+      chargingHours,
+      avgKw,
+      peakKw,
       dispatchCount: session.dispatchCount,
       location: session.location,
       sources: Array.from(session.sources),
+      accountNumbers,
+      metaKeys,
       estimatedCost: cost,
       dispatches: session.dispatches
     };
@@ -212,11 +239,17 @@ function startNewSession(dispatch) {
 function renderSummary(dispatches, sessions) {
   const totalKwh = sessions.reduce((sum, s) => sum + s.totalKwh, 0);
   const totalCost = sessions.reduce((sum, s) => sum + s.estimatedCost, 0);
+  const totalChargingHours = dispatches.reduce((sum, d) => sum + d.durationHours, 0);
+  const avgKw = totalChargingHours > 0 ? totalKwh / totalChargingHours : 0;
+  const peakKw = dispatches.reduce((max, d) => Math.max(max, d.kw || 0), 0);
 
   document.getElementById("dispatchCount").textContent = dispatches.length;
   document.getElementById("sessionCount").textContent = sessions.length;
   document.getElementById("totalKwh").textContent = `${totalKwh.toFixed(1)} kWh`;
   document.getElementById("totalCostEstimate").textContent = `£${totalCost.toFixed(2)}`;
+  document.getElementById("avgKw").textContent = `${avgKw.toFixed(2)} kW`;
+  document.getElementById("peakKw").textContent = `${peakKw.toFixed(2)} kW`;
+  renderMetaSummary(dispatches);
 }
 
 function renderSessions(sessions) {
@@ -241,8 +274,8 @@ function renderSessions(sessions) {
             <span class="detail-value">${session.totalKwh.toFixed(2)} kWh</span>
           </div>
           <div class="detail-item">
-            <span class="detail-label">Duration</span>
-            <span class="detail-value">${session.durationHours.toFixed(2)} h</span>
+            <span class="detail-label">Charging Time</span>
+            <span class="detail-value">${session.chargingHours.toFixed(2)} h</span>
           </div>
           <div class="detail-item">
             <span class="detail-label">Dispatches</span>
@@ -251,6 +284,22 @@ function renderSessions(sessions) {
           <div class="detail-item">
             <span class="detail-label">Est. Cost</span>
             <span class="detail-value">£${session.estimatedCost.toFixed(2)}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Avg Speed</span>
+            <span class="detail-value">${session.avgKw.toFixed(2)} kW</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Peak Block</span>
+            <span class="detail-value">${session.peakKw.toFixed(2)} kW</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Meta Keys</span>
+            <span class="detail-value">${session.metaKeys.length ? session.metaKeys.join(", ") : "none"}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Account</span>
+            <span class="detail-value">${session.accountNumbers.length ? session.accountNumbers.join(", ") : "n/a"}</span>
           </div>
         </div>
         <div class="dispatch-graph">
@@ -264,9 +313,13 @@ function renderSessions(sessions) {
                 <th>Start</th>
                 <th>End</th>
                 <th>Charged kWh</th>
+                <th>Duration</th>
+                <th>Speed</th>
                 <th>Raw delta kWh</th>
+                <th>Raw delta</th>
                 <th>Source</th>
                 <th>Location</th>
+                <th>Meta</th>
               </tr>
             </thead>
             <tbody>
@@ -275,9 +328,13 @@ function renderSessions(sessions) {
                   <td>${formatDateTime(dispatch.start)}</td>
                   <td>${formatDateTime(dispatch.end)}</td>
                   <td>${dispatch.chargeInKwh.toFixed(2)}</td>
+                  <td>${(dispatch.durationHours * 60).toFixed(0)} min</td>
+                  <td>${dispatch.kw.toFixed(2)} kW</td>
                   <td>${dispatch.rawDeltaKwh.toFixed(2)}</td>
+                  <td>${dispatch.rawDelta ? JSON.stringify(dispatch.rawDelta) : "-"}</td>
                   <td>${dispatch.source}</td>
                   <td>${dispatch.location}</td>
+                  <td>${dispatch.rawMeta ? escapeHtml(JSON.stringify(dispatch.rawMeta)) : "-"}</td>
                 </tr>
               `).join("")}
             </tbody>
@@ -315,8 +372,43 @@ function buildDispatchBars(dispatches) {
   const maxKwh = Math.max(...dispatches.map((d) => d.chargeInKwh), 0.01);
   return dispatches.map((dispatch) => {
     const width = Math.max(6, Math.round((dispatch.chargeInKwh / maxKwh) * 100));
-    return `<div class="dispatch-bar-row"><span class="dispatch-bar-label">${formatTime(dispatch.start)}</span><div class="dispatch-bar-track"><div class="dispatch-bar-fill" style="width:${width}%"></div></div><span class="dispatch-bar-kwh">${dispatch.chargeInKwh.toFixed(2)}kWh</span></div>`;
+    return `<div class="dispatch-bar-row"><span class="dispatch-bar-label">${formatTime(dispatch.start)}-${formatTime(dispatch.end)}</span><div class="dispatch-bar-track"><div class="dispatch-bar-fill" style="width:${width}%"></div></div><span class="dispatch-bar-kwh">${dispatch.chargeInKwh.toFixed(2)}kWh · ${dispatch.kw.toFixed(2)}kW</span></div>`;
   }).join("");
+}
+
+function renderMetaSummary(dispatches) {
+  const target = document.getElementById("metaSummary");
+  if (!target) return;
+  const counts = {};
+
+  for (const dispatch of dispatches) {
+    if (dispatch.rawMeta && typeof dispatch.rawMeta === "object") {
+      for (const key of Object.keys(dispatch.rawMeta)) {
+        counts[key] = (counts[key] || 0) + 1;
+      }
+    }
+  }
+
+  const keys = Object.keys(counts).sort();
+  if (!keys.length) {
+    target.value = "No meta keys present in current payload.";
+    return;
+  }
+
+  const lines = [
+    "Meta keys found (count of blocks containing each key):",
+    ...keys.map((key) => `- ${key}: ${counts[key]}`)
+  ];
+  target.value = lines.join("\n");
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 function showError(message) {

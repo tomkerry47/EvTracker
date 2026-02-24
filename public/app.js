@@ -198,6 +198,7 @@ function displaySessions(sessions) {
 // Create HTML for a session card
 function createSessionCard(session) {
     const duration = calculateChargingDuration(session);
+    const avgSpeedKw = calculateAverageChargingSpeed(session);
     
     const source = session.source || 'manual';
     const isAutoSource = source.startsWith('octopus');
@@ -236,6 +237,10 @@ function createSessionCard(session) {
                 <div class="detail-item">
                     <span class="detail-label">Duration</span>
                     <span class="detail-value">${duration}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Avg Speed</span>
+                    <span class="detail-value">${avgSpeedKw.toFixed(2)} kW</span>
                 </div>
                 <div class="detail-item">
                     <span class="detail-label">Tariff Rate</span>
@@ -441,6 +446,17 @@ function calculateDuration(startTime, endTime) {
 
 function calculateChargingDuration(session) {
     const blocks = Array.isArray(session.dispatchBlocks) ? session.dispatchBlocks : [];
+
+    // For completedDispatches, duration should represent active charging blocks.
+    // Prefer persisted dispatch count (30-minute blocks) over window span.
+    const dispatchCount = Number(session.dispatchCount);
+    if (Number.isFinite(dispatchCount) && dispatchCount > 0) {
+        const totalMinutes = Math.round(dispatchCount * 30);
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        return `${hours}h ${minutes}m`;
+    }
+
     if (!blocks.length) {
         return calculateDuration(session.startTime, session.endTime);
     }
@@ -456,6 +472,39 @@ function calculateChargingDuration(session) {
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
     return `${hours}h ${minutes}m`;
+}
+
+function calculateAverageChargingSpeed(session) {
+    const totalKwh = parseFloat(session.energyAdded) || 0;
+    if (totalKwh <= 0) return 0;
+
+    const blocks = Array.isArray(session.dispatchBlocks) ? session.dispatchBlocks : [];
+    const dispatchCount = Number(session.dispatchCount);
+    if (Number.isFinite(dispatchCount) && dispatchCount > 0) {
+        const hours = dispatchCount * 0.5;
+        return hours > 0 ? totalKwh / hours : 0;
+    }
+
+    if (blocks.length) {
+        const totalHours = blocks.reduce((sum, block) => {
+            const start = new Date(block.start);
+            const end = new Date(block.end);
+            return sum + calculateDurationHours(start, end);
+        }, 0);
+        return totalHours > 0 ? totalKwh / totalHours : 0;
+    }
+
+    const start = new Date(`2000-01-01 ${session.startTime}`);
+    const end = new Date(`2000-01-01 ${session.endTime}`);
+    let hours = (end - start) / 1000 / 60 / 60;
+    if (hours < 0) hours += 24;
+    return hours > 0 ? totalKwh / hours : 0;
+}
+
+function calculateDurationHours(start, end) {
+    if (!(start instanceof Date) || !(end instanceof Date)) return 0;
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
+    return Math.max(0, (end - start) / 1000 / 60 / 60);
 }
 
 // Filter sessions by date range and vehicle

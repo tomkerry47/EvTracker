@@ -9,3 +9,4 @@ ADD COLUMN IF NOT EXISTS dispatch_blocks JSONB;
 
 CREATE INDEX IF NOT EXISTS idx_charging_sessions_dispatch_count
 ON charging_sessions(dispatch_count);
+Í
