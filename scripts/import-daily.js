@@ -176,18 +176,30 @@ function durationLabel(minutes) {
   return `${h}h ${m}m`;
 }
 
-function isOvernightSession(session, londonYesterday, londonToday) {
+function getSessionEndMs(session) {
+  const blocks = Array.isArray(session.dispatchBlocks) ? session.dispatchBlocks : [];
+  if (blocks.length > 0) {
+    const endTimes = blocks
+      .map((block) => new Date(block.end).getTime())
+      .filter((ms) => Number.isFinite(ms));
+    if (endTimes.length > 0) {
+      return Math.max(...endTimes);
+    }
+  }
+
+  const date = String(session.date || '').slice(0, 10);
   const start = String(session.startTime || '00:00').slice(0, 5);
   const end = String(session.endTime || '00:00').slice(0, 5);
-  const date = String(session.date || '').slice(0, 10);
-  const crossesMidnight = end <= start;
-  const lateEvening = date === londonYesterday && start >= '22:00';
-  const earlyMorning = date === londonToday && end <= '07:00';
-  const overnightCross = date === londonYesterday && crossesMidnight;
-  return lateEvening || earlyMorning || overnightCross;
+  if (!date) return NaN;
+
+  const startMs = new Date(`${date}T${start}:00Z`).getTime();
+  let endMs = new Date(`${date}T${end}:00Z`).getTime();
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return NaN;
+  if (endMs <= startMs) endMs += 24 * 60 * 60 * 1000;
+  return endMs;
 }
 
-async function sendOvernightPipedreamNotification(sessions) {
+async function sendLast24HoursPipedreamNotification(sessions) {
   const url = process.env.PIPEDREAM_WEBHOOK_URL;
   if (!url) return;
 
@@ -197,19 +209,17 @@ async function sendOvernightPipedreamNotification(sessions) {
   const inWindow = londonHour === 7 && londonMinute < 60;
   if (!inWindow) return;
 
-  const londonToday = getLondonDateString(now);
-  const yesterdayDate = new Date(now);
-  yesterdayDate.setUTCDate(yesterdayDate.getUTCDate() - 1);
-  const londonYesterday = getLondonDateString(yesterdayDate);
+  const nowMs = now.getTime();
+  const cutoffMs = nowMs - (24 * 60 * 60 * 1000);
+  const recentSessions = (sessions || []).filter((session) => {
+    const endMs = getSessionEndMs(session);
+    return Number.isFinite(endMs) && endMs >= cutoffMs && endMs <= nowMs;
+  });
 
-  const overnight = (sessions || []).filter((session) =>
-    isOvernightSession(session, londonYesterday, londonToday)
-  );
-
-  if (overnight.length === 0) return;
+  if (recentSessions.length === 0) return;
 
   const baseUrl = process.env.APP_BASE_URL || process.env.PUBLIC_APP_URL || '';
-  const sessionLines = overnight.map((session) => {
+  const sessionLines = recentSessions.map((session) => {
     const mins = calculateSessionDurationMinutes(session);
     const cost = Number(session.cost || 0).toFixed(2);
     const energy = Number(session.energyAdded || 0).toFixed(2);
@@ -218,16 +228,16 @@ async function sendOvernightPipedreamNotification(sessions) {
   });
 
   const payload = {
-    title: 'EvTracker Overnight Charging Summary',
-    text: `Overnight sessions found: ${overnight.length}`,
+    title: 'EvTracker Last 24h Charging Summary',
+    text: `Sessions found in last 24h: ${recentSessions.length}`,
     source: 'evtracker-scheduled',
-    date: londonToday,
+    date: getLondonDateString(now),
     sessions: sessionLines,
     url: baseUrl
   };
 
   await axios.post(url, payload, { timeout: 10000 });
-  console.log('✅ Overnight summary sent to Pipedream');
+  console.log('✅ Last 24h summary sent to Pipedream');
 }
 
 async function importDailyCharges() {
@@ -434,7 +444,7 @@ async function importDailyCharges() {
     console.log(`💰 Total cost: £${result.reduce((sum, s) => sum + s.cost, 0).toFixed(2)}`);
     console.log(`⚡ Total energy: ${result.reduce((sum, s) => sum + s.energyAdded, 0).toFixed(2)} kWh`);
 
-    await sendOvernightPipedreamNotification(result);
+    await sendLast24HoursPipedreamNotification(result);
     
     // Store last import info in database (always, even if no new sessions)
     try {
