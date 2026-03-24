@@ -1,10 +1,17 @@
 // API Base URL
 const API_URL = '/api';
+const TRACKED_MILEAGE_VEHICLES = ['Kia EV5', 'Peugeot E-2008'];
+
+let currentFilter = 'all';
+let currentVehicleFilter = 'all';
+let allSessionsCache = [];
+let sessionsLoaded = false;
+let mileageReadingsCache = [];
+let latestMileageByVehicle = {};
+let mileageLoaded = false;
 
 // Load sessions on page load
-document.addEventListener('DOMContentLoaded', () => {
-    loadSessions();
-    loadStats();
+document.addEventListener('DOMContentLoaded', async () => {
     setupForm();
     setDefaultDate();
     setupCostCalculation();
@@ -13,7 +20,15 @@ document.addEventListener('DOMContentLoaded', () => {
     setupAutoDetectRateToggle();
     setupFilterButtons();
     setupVehicleFilter();
+    setupMileageForm();
     setupMobileFab();
+    await loadSessions();
+    try {
+        await loadMileageHistory();
+    } catch (error) {
+        console.error('Error loading mileage history:', error);
+    }
+    await loadStats();
     displayLastImportInfo();
 });
 
@@ -30,7 +45,8 @@ function setupFilterButtons() {
 
 // Set default date to today
 function setDefaultDate() {
-    const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
     document.getElementById('date').value = today;
     
     // Set default import dates (last 7 days)
@@ -42,6 +58,11 @@ function setDefaultDate() {
     document.getElementById('importTariffRate').value = '7.0';
     if (document.getElementById('vehicle')) document.getElementById('vehicle').value = 'Kia EV5';
     setPillValue('vehicle', 'Kia EV5');
+    if (document.getElementById('mileageVehicle')) document.getElementById('mileageVehicle').value = 'Kia EV5';
+    setPillValue('mileageVehicle', 'Kia EV5');
+    if (document.getElementById('mileageDate')) document.getElementById('mileageDate').value = today;
+    if (document.getElementById('mileageTime')) document.getElementById('mileageTime').value = formatTimeInput(now);
+    updateMileageCurrentInfo();
 }
 
 function setupVehicleFilter() {
@@ -60,6 +81,10 @@ function setupVehicleFilter() {
                     currentVehicleFilter = targetInput.value;
                     loadSessions(currentFilter);
                     loadStats(currentFilter);
+                }
+
+                if (targetId === 'mileageVehicle') {
+                    updateMileageCurrentInfo();
                 }
             });
         });
@@ -100,28 +125,64 @@ function setupForm() {
     });
 }
 
-// Global filter state
-let currentFilter = 'all';
-let currentVehicleFilter = 'all';
+function setupMileageForm() {
+    const form = document.getElementById('mileageForm');
+    if (!form) return;
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await saveMileageReading();
+    });
+}
+
+async function ensureSessionsLoaded(force = false) {
+    if (!force && sessionsLoaded) return allSessionsCache;
+
+    const response = await fetch(`${API_URL}/sessions`);
+    if (!response.ok) {
+        throw new Error('Failed to load charging sessions');
+    }
+
+    allSessionsCache = await response.json();
+    sessionsLoaded = true;
+
+    console.log('=== Frontend Received Sessions ===');
+    console.log('Total sessions:', allSessionsCache.length);
+    if (allSessionsCache.length > 0) {
+        console.log('First session:');
+        console.log('  date:', allSessionsCache[0].date, 'Type:', typeof allSessionsCache[0].date);
+        console.log('  startTime:', allSessionsCache[0].startTime);
+        console.log('  endTime:', allSessionsCache[0].endTime);
+        console.log('  source:', allSessionsCache[0].source);
+    }
+    console.log('=== End Frontend Receive ===');
+
+    return allSessionsCache;
+}
+
+async function loadMileageHistory(force = false) {
+    if (!force && mileageLoaded) {
+        updateMileageCurrentInfo();
+        return mileageReadingsCache;
+    }
+
+    const response = await fetch(`${API_URL}/mileage`);
+    if (!response.ok) {
+        throw new Error('Failed to load mileage history');
+    }
+
+    const data = await response.json();
+    mileageReadingsCache = Array.isArray(data.readings) ? data.readings : [];
+    latestMileageByVehicle = data.latestByVehicle || {};
+    mileageLoaded = true;
+    updateMileageCurrentInfo();
+    return mileageReadingsCache;
+}
 
 // Load and display all sessions
-async function loadSessions(filter = currentFilter) {
+async function loadSessions(filter = currentFilter, options = {}) {
     currentFilter = filter;
     try {
-        const response = await fetch(`${API_URL}/sessions`);
-        const sessions = await response.json();
-        
-        console.log('=== Frontend Received Sessions ===');
-        console.log('Total sessions:', sessions.length);
-        if (sessions.length > 0) {
-            console.log('First session:');
-            console.log('  date:', sessions[0].date, 'Type:', typeof sessions[0].date);
-            console.log('  startTime:', sessions[0].startTime);
-            console.log('  endTime:', sessions[0].endTime);
-            console.log('  source:', sessions[0].source);
-        }
-        console.log('=== End Frontend Receive ===');
-        
+        const sessions = await ensureSessionsLoaded(options.force === true);
         // Filter sessions based on current filter
         const filteredSessions = filterSessionsByDateAndVehicle(sessions, filter, currentVehicleFilter);
         displaySessions(filteredSessions);
@@ -133,34 +194,30 @@ async function loadSessions(filter = currentFilter) {
 }
 
 // Load and display statistics
-async function loadStats(filter = currentFilter) {
+async function loadStats(filter = currentFilter, options = {}) {
     try {
-        const response = await fetch(`${API_URL}/stats`);
-        const allStats = await response.json();
-        
-        // If date/vehicle filter is applied, calculate filtered stats
-        if (filter !== 'all' || currentVehicleFilter !== 'all') {
-            const sessionsResponse = await fetch(`${API_URL}/sessions`);
-            const allSessions = await sessionsResponse.json();
-            const filteredSessions = filterSessionsByDateAndVehicle(allSessions, filter, currentVehicleFilter);
-            
-            // Calculate filtered stats
-            const totalSessions = filteredSessions.length;
-            const totalEnergy = filteredSessions.reduce((sum, s) => sum + parseFloat(s.energyAdded), 0);
-            const totalCost = filteredSessions.reduce((sum, s) => sum + parseFloat(s.cost), 0);
-            const averageEnergy = totalSessions > 0 ? totalEnergy / totalSessions : 0;
-            
-            document.getElementById('totalSessions').textContent = totalSessions;
-            document.getElementById('totalEnergy').textContent = `${totalEnergy.toFixed(1)} kWh`;
-            document.getElementById('totalCost').textContent = `£${totalCost.toFixed(2)}`;
-            document.getElementById('avgEnergy').textContent = `${averageEnergy.toFixed(1)} kWh`;
-        } else {
-            // Use all stats
-            document.getElementById('totalSessions').textContent = allStats.totalSessions;
-            document.getElementById('totalEnergy').textContent = `${allStats.totalEnergy.toFixed(1)} kWh`;
-            document.getElementById('totalCost').textContent = `£${allStats.totalCost.toFixed(2)}`;
-            document.getElementById('avgEnergy').textContent = `${allStats.averageEnergy.toFixed(1)} kWh`;
+        const allSessions = await ensureSessionsLoaded(options.forceSessions === true);
+        try {
+            await loadMileageHistory(options.forceMileage === true);
+        } catch (mileageError) {
+            console.error('Error loading mileage history:', mileageError);
+            mileageReadingsCache = [];
+            latestMileageByVehicle = {};
+            mileageLoaded = false;
         }
+        const filteredSessions = filterSessionsByDateAndVehicle(allSessions, filter, currentVehicleFilter);
+        const totalSessions = filteredSessions.length;
+        const totalEnergy = filteredSessions.reduce((sum, s) => sum + parseFloat(s.energyAdded), 0);
+        const totalCost = filteredSessions.reduce((sum, s) => sum + parseFloat(s.cost), 0);
+        const averageEnergy = totalSessions > 0 ? totalEnergy / totalSessions : 0;
+        const mileageStats = calculateMileageStats(filteredSessions, filter, currentVehicleFilter);
+
+        document.getElementById('totalSessions').textContent = totalSessions;
+        document.getElementById('totalEnergy').textContent = `${totalEnergy.toFixed(1)} kWh`;
+        document.getElementById('totalCost').textContent = `£${totalCost.toFixed(2)}`;
+        document.getElementById('avgEnergy').textContent = `${averageEnergy.toFixed(1)} kWh`;
+        document.getElementById('costPerMile').textContent = mileageStats.label;
+        document.getElementById('costPerMileMeta').textContent = mileageStats.meta;
     } catch (error) {
         console.error('Error loading stats:', error);
     }
@@ -298,7 +355,7 @@ async function updateSessionVehicle(sessionId, vehicle) {
         if (!response.ok) {
             throw new Error('Failed to update vehicle');
         }
-        await loadSessions(currentFilter);
+        await loadSessions(currentFilter, { force: true });
         await loadStats(currentFilter);
     } catch (error) {
         console.error('Error updating session vehicle:', error);
@@ -397,8 +454,8 @@ async function addSession() {
             // Close the modal
             document.getElementById('manualEntryModal').style.display = 'none';
             document.body.style.overflow = 'auto';
-            await loadSessions();
-            await loadStats();
+            await loadSessions(currentFilter, { force: true });
+            await loadStats(currentFilter);
         } else {
             throw new Error('Failed to add session');
         }
@@ -416,7 +473,7 @@ async function deleteSession(id) {
         });
         
         if (response.ok) {
-            await loadSessions();
+            await loadSessions(currentFilter, { force: true });
             await loadStats();
         } else {
             throw new Error('Failed to delete session');
@@ -556,6 +613,130 @@ function formatDate(dateString) {
     return formatted;
 }
 
+function formatTimeInput(date) {
+    return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function formatMileageTimestamp(timestamp) {
+    const value = new Date(timestamp);
+    if (Number.isNaN(value.getTime())) return 'Unknown time';
+    return value.toLocaleString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+function updateMileageCurrentInfo() {
+    const infoEl = document.getElementById('mileageCurrentInfo');
+    const vehicle = document.getElementById('mileageVehicle')?.value;
+    if (!infoEl || !vehicle) return;
+
+    const latest = latestMileageByVehicle[vehicle];
+    if (!latest) {
+        infoEl.textContent = 'No mileage reading recorded yet for this vehicle.';
+        return;
+    }
+
+    infoEl.textContent = `Latest for ${vehicle}: ${Number(latest.mileage).toLocaleString('en-GB')} miles at ${formatMileageTimestamp(latest.recordedAt)}`;
+}
+
+function getFilterDateRange(filter) {
+    const end = new Date();
+    const daysMap = { '7': 7, '30': 30, '90': 90 };
+    const days = daysMap[filter];
+
+    if (!days) {
+        return { start: null, end };
+    }
+
+    const start = new Date(end);
+    start.setDate(start.getDate() - days);
+    return { start, end };
+}
+
+function getLatestReadingOnOrBefore(readings, cutoffDate) {
+    const cutoffMs = cutoffDate instanceof Date ? cutoffDate.getTime() : Number.POSITIVE_INFINITY;
+    return readings
+        .filter((reading) => new Date(reading.recordedAt).getTime() <= cutoffMs)
+        .sort((a, b) => new Date(a.recordedAt) - new Date(b.recordedAt))
+        .pop() || null;
+}
+
+function calculateMileageForVehicle(vehicle, filter) {
+    const readings = mileageReadingsCache
+        .filter((reading) => reading.vehicle === vehicle)
+        .sort((a, b) => new Date(a.recordedAt) - new Date(b.recordedAt));
+
+    if (!readings.length) {
+        return null;
+    }
+
+    const { start, end } = getFilterDateRange(filter);
+    const startReading = start ? getLatestReadingOnOrBefore(readings, start) : readings[0];
+    const endReading = getLatestReadingOnOrBefore(readings, end);
+
+    if (!startReading || !endReading) {
+        return null;
+    }
+
+    return {
+        startReading,
+        endReading,
+        miles: Math.max(0, Number(endReading.mileage) - Number(startReading.mileage))
+    };
+}
+
+function calculateMileageStats(filteredSessions, filter, vehicleFilter) {
+    const selectedVehicles = vehicleFilter === 'all'
+        ? TRACKED_MILEAGE_VEHICLES
+        : TRACKED_MILEAGE_VEHICLES.filter((vehicle) => vehicle === vehicleFilter);
+
+    if (!selectedVehicles.length) {
+        return {
+            label: '--',
+            meta: 'Mileage tracking is available for the EV5 and E-2008.'
+        };
+    }
+
+    let totalTrackedCost = 0;
+    let totalTrackedMiles = 0;
+    let vehiclesIncluded = 0;
+
+    for (const vehicle of selectedVehicles) {
+        const vehicleSessions = filteredSessions.filter((session) => getSessionVehicle(session) === vehicle);
+        if (!vehicleSessions.length && vehicleFilter === 'all') {
+            continue;
+        }
+
+        const mileageWindow = calculateMileageForVehicle(vehicle, filter);
+        if (!mileageWindow || mileageWindow.miles <= 0) {
+            continue;
+        }
+
+        const vehicleCost = vehicleSessions.reduce((sum, session) => sum + (parseFloat(session.cost) || 0), 0);
+        totalTrackedCost += vehicleCost;
+        totalTrackedMiles += mileageWindow.miles;
+        vehiclesIncluded++;
+    }
+
+    if (totalTrackedMiles <= 0) {
+        return {
+            label: '--',
+            meta: 'Add a newer mileage reading to calculate cost per mile.'
+        };
+    }
+
+    const suffix = vehiclesIncluded > 1 ? ` across ${vehiclesIncluded} vehicles` : '';
+    const trackedNote = vehicleFilter === 'all' ? ' Tracked vehicles only.' : '';
+    return {
+        label: `£${(totalTrackedCost / totalTrackedMiles).toFixed(2)}/mi`,
+        meta: `${totalTrackedMiles.toFixed(1)} miles tracked${suffix}.${trackedNote}`.trim()
+    };
+}
+
 // Setup modals
 function setupModals() {
     // Get modals
@@ -588,6 +769,10 @@ function setupModals() {
             document.getElementById('sessionForm').reset();
             setDefaultDate();
             document.getElementById('tariffRate').value = '7.0';
+        }
+        if (modal.id === 'mileageModal') {
+            document.getElementById('mileageForm').reset();
+            setDefaultDate();
         }
     }
     
@@ -723,7 +908,7 @@ async function importFromOctopus() {
             displayLastImportInfo();
             
             // Reload sessions and stats
-            await loadSessions();
+            await loadSessions(currentFilter, { force: true });
             await loadStats();
         } else {
             throw new Error(data.error || 'Import failed');
@@ -825,4 +1010,51 @@ function displayImportInfo(timestamp, count, element, totalDetected = null, skip
     
     element.innerHTML = message;
     element.style.display = 'block';
+}
+
+async function saveMileageReading() {
+    const vehicle = document.getElementById('mileageVehicle').value;
+    const mileage = parseFloat(document.getElementById('mileageValue').value);
+    const date = document.getElementById('mileageDate').value;
+    const time = document.getElementById('mileageTime').value;
+
+    if (!vehicle || !date || !time || !Number.isFinite(mileage) || mileage < 0) {
+        alert('Please enter a vehicle, mileage, date, and time.');
+        return;
+    }
+
+    const recordedAt = new Date(`${date}T${time}`);
+    if (Number.isNaN(recordedAt.getTime())) {
+        alert('Please enter a valid mileage date and time.');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/mileage`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                vehicle,
+                mileage,
+                recordedAt: recordedAt.toISOString()
+            })
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to save mileage');
+        }
+
+        await loadMileageHistory(true);
+        document.getElementById('mileageModal').style.display = 'none';
+        document.body.style.overflow = 'auto';
+        document.getElementById('mileageForm').reset();
+        setDefaultDate();
+        await loadStats(currentFilter);
+    } catch (error) {
+        console.error('Error saving mileage:', error);
+        alert(error.message || 'Failed to save mileage');
+    }
 }

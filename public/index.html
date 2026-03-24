@@ -27,6 +27,11 @@
                 <p class="stat-value" id="totalCost">£0.00</p>
             </div>
             <div class="stat-card">
+                <h3>Cost / Mile</h3>
+                <p class="stat-value" id="costPerMile">--</p>
+                <p class="stat-meta" id="costPerMileMeta">Add mileage updates to start tracking</p>
+            </div>
+            <div class="stat-card">
                 <h3>Avg Energy/Session</h3>
                 <p class="stat-value" id="avgEnergy">0 kWh</p>
             </div>
@@ -36,6 +41,9 @@
         <div class="action-buttons desktop-actions">
             <button data-open-modal="manualEntryModal" class="btn btn-primary">
                 ➕ Manual Entry
+            </button>
+            <button data-open-modal="mileageModal" class="btn btn-secondary">
+                🚗 Update Mileage
             </button>
             <button data-open-modal="importModal" class="btn btn-secondary">
                 🐙 Import Sessions
@@ -47,6 +55,7 @@
             </button>
             <div id="mobileFabMenu" class="mobile-fab-menu">
                 <button data-open-modal="manualEntryModal" class="btn btn-primary">Manual Entry</button>
+                <button data-open-modal="mileageModal" class="btn btn-secondary">Update Mileage</button>
                 <button data-open-modal="importModal" class="btn btn-secondary">Import Sessions</button>
             </div>
         </div>
@@ -155,6 +164,48 @@
                 <button id="importButton" class="btn btn-import">Import Sessions</button>
                 <div id="importStatus" class="import-status"></div>
             </div>
+            </div>
+        </div>
+
+        <!-- Mileage Modal -->
+        <div id="mileageModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Update Mileage</h2>
+                    <span class="close" data-modal="mileageModal">&times;</span>
+                </div>
+                <p class="form-description">Record the latest odometer reading for either tracked vehicle</p>
+                <form id="mileageForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="mileageVehicle">Vehicle</label>
+                            <input type="hidden" id="mileageVehicle" value="Kia EV5">
+                            <div class="pill-group" data-target-input="mileageVehicle">
+                                <button type="button" class="pill-btn active" data-value="Kia EV5">Kia EV5</button>
+                                <button type="button" class="pill-btn" data-value="Peugeot E-2008">Peugeot E-2008</button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="mileageValue">Mileage</label>
+                            <input type="number" id="mileageValue" step="1" min="0" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="mileageDate">Date</label>
+                            <input type="date" id="mileageDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="mileageTime">Time</label>
+                            <input type="time" id="mileageTime" required>
+                        </div>
+                    </div>
+                    <div class="mileage-current" id="mileageCurrentInfo">Loading latest mileage…</div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Save Mileage</button>
+                        <button type="button" class="btn-cancel" data-modal="mileageModal">Cancel</button>
+                    </div>
+                </form>
             </div>
         </div>
 

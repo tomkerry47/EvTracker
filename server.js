@@ -217,6 +217,107 @@ async function sendImportNotifications(payload) {
   }
 }
 
+const TRACKED_MILEAGE_VEHICLES = ['Kia EV5', 'Peugeot E-2008'];
+
+function getDefaultMileageHistory() {
+  return [
+    {
+      id: 'ev5-baseline-2026-01-23',
+      vehicle: 'Kia EV5',
+      mileage: 5,
+      recordedAt: '2026-01-23T00:00:00.000Z',
+      source: 'baseline'
+    },
+    {
+      id: 'e2008-baseline-2026-01-23',
+      vehicle: 'Peugeot E-2008',
+      mileage: 21100,
+      recordedAt: '2026-01-23T00:00:00.000Z',
+      source: 'baseline'
+    }
+  ];
+}
+
+function normalizeMileageVehicleName(value) {
+  const input = String(value || '').trim().toLowerCase();
+  if (['kia ev5', 'ev5'].includes(input)) return 'Kia EV5';
+  if (['peugeot e-2008', 'peugeot e2008', 'e-2008', 'e2008'].includes(input)) return 'Peugeot E-2008';
+  return null;
+}
+
+function normalizeMileageReading(input) {
+  const vehicle = normalizeMileageVehicleName(input?.vehicle);
+  const mileage = Number(input?.mileage);
+  const recordedAt = new Date(input?.recordedAt || input?.timestamp || input?.date);
+
+  if (!vehicle || !Number.isFinite(mileage) || mileage < 0 || Number.isNaN(recordedAt.getTime())) {
+    return null;
+  }
+
+  return {
+    id: String(input?.id || `${vehicle}-${recordedAt.toISOString()}-${mileage}`),
+    vehicle,
+    mileage,
+    recordedAt: recordedAt.toISOString(),
+    source: input?.source || 'manual'
+  };
+}
+
+function compareMileageReadings(a, b) {
+  return new Date(a.recordedAt) - new Date(b.recordedAt);
+}
+
+function summarizeLatestMileage(history) {
+  return TRACKED_MILEAGE_VEHICLES.reduce((summary, vehicle) => {
+    const latest = history
+      .filter((entry) => entry.vehicle === vehicle)
+      .sort(compareMileageReadings)
+      .pop() || null;
+    summary[vehicle] = latest;
+    return summary;
+  }, {});
+}
+
+async function getSettingValue(key) {
+  const result = await pool.query(
+    'SELECT value FROM app_settings WHERE key = $1',
+    [key]
+  );
+
+  if (!result.rows.length) return null;
+
+  try {
+    return JSON.parse(result.rows[0].value);
+  } catch (error) {
+    console.error(`Error parsing setting "${key}":`, error);
+    return null;
+  }
+}
+
+async function setSettingValue(key, value) {
+  await pool.query(
+    `INSERT INTO app_settings (key, value)
+     VALUES ($1, $2)
+     ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
+    [key, JSON.stringify(value)]
+  );
+}
+
+async function getMileageHistory() {
+  const stored = await getSettingValue('mileage_history');
+  const defaults = getDefaultMileageHistory().map(normalizeMileageReading).filter(Boolean);
+  const saved = Array.isArray(stored)
+    ? stored.map(normalizeMileageReading).filter(Boolean)
+    : [];
+
+  const merged = new Map();
+  [...defaults, ...saved].forEach((entry) => {
+    merged.set(`${entry.vehicle}|${entry.recordedAt}|${entry.mileage}`, entry);
+  });
+
+  return [...merged.values()].sort(compareMileageReadings);
+}
+
 // API Routes
 app.get('/api/version', (req, res) => {
   const build = String(appBuildId);
@@ -888,6 +989,51 @@ app.get('/api/settings/:key', async (req, res) => {
   } catch (error) {
     console.error('Error getting setting:', error);
     res.status(500).json({ error: 'Failed to get setting' });
+  }
+});
+
+app.get('/api/mileage', async (req, res) => {
+  try {
+    const readings = await getMileageHistory();
+    res.json({
+      readings,
+      trackedVehicles: TRACKED_MILEAGE_VEHICLES,
+      latestByVehicle: summarizeLatestMileage(readings)
+    });
+  } catch (error) {
+    console.error('Error getting mileage history:', error);
+    res.status(500).json({ error: 'Failed to get mileage history' });
+  }
+});
+
+app.post('/api/mileage', async (req, res) => {
+  try {
+    const reading = normalizeMileageReading(req.body);
+
+    if (!reading) {
+      return res.status(400).json({
+        error: 'vehicle, mileage, and recordedAt are required. Vehicle must be Kia EV5 or Peugeot E-2008.'
+      });
+    }
+
+    const history = await getMileageHistory();
+    history.push(reading);
+    const deduped = new Map();
+    history.forEach((entry) => {
+      deduped.set(`${entry.vehicle}|${entry.recordedAt}|${entry.mileage}`, entry);
+    });
+    const nextHistory = [...deduped.values()].sort(compareMileageReadings);
+
+    await setSettingValue('mileage_history', nextHistory);
+
+    res.status(201).json({
+      success: true,
+      reading,
+      latestByVehicle: summarizeLatestMileage(nextHistory)
+    });
+  } catch (error) {
+    console.error('Error saving mileage history:', error);
+    res.status(500).json({ error: 'Failed to save mileage history' });
   }
 });
 
