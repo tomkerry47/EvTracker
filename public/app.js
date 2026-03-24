@@ -274,12 +274,14 @@ async function loadStats(filter = currentFilter, options = {}) {
         const totalEnergy = filteredSessions.reduce((sum, s) => sum + parseFloat(s.energyAdded), 0);
         const totalCost = filteredSessions.reduce((sum, s) => sum + parseFloat(s.cost), 0);
         const averageEnergy = totalSessions > 0 ? totalEnergy / totalSessions : 0;
+        const averageCostPerSession = totalSessions > 0 ? totalCost / totalSessions : 0;
         const mileageStats = calculateMileageStats(filteredSessions, filter, currentVehicleFilter);
 
         document.getElementById('totalSessions').textContent = totalSessions;
         document.getElementById('totalEnergy').textContent = `${totalEnergy.toFixed(1)} kWh`;
         document.getElementById('totalCost').textContent = `£${totalCost.toFixed(2)}`;
         document.getElementById('avgEnergy').textContent = `${averageEnergy.toFixed(1)} kWh`;
+        document.getElementById('avgCostPerSession').textContent = `£${averageCostPerSession.toFixed(2)}`;
         document.getElementById('costPerMile').textContent = mileageStats.label;
         document.getElementById('costPerMileMeta').textContent = mileageStats.meta;
     } catch (error) {
