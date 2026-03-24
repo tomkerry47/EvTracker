@@ -9,6 +9,9 @@ let sessionsLoaded = false;
 let mileageReadingsCache = [];
 let latestMileageByVehicle = {};
 let mileageLoaded = false;
+let tariffHistoryCache = [];
+let activeTariffEntry = null;
+let tariffLoaded = false;
 
 // Load sessions on page load
 document.addEventListener('DOMContentLoaded', async () => {
@@ -21,12 +24,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupFilterButtons();
     setupVehicleFilter();
     setupMileageForm();
+    setupTariffForm();
     setupMobileFab();
     await loadSessions();
     try {
         await loadMileageHistory();
     } catch (error) {
         console.error('Error loading mileage history:', error);
+    }
+    try {
+        await loadTariffHistory();
+    } catch (error) {
+        console.error('Error loading tariff history:', error);
     }
     await loadStats();
     displayLastImportInfo();
@@ -47,6 +56,7 @@ function setupFilterButtons() {
 function setDefaultDate() {
     const now = new Date();
     const today = now.toISOString().split('T')[0];
+    const currentTariffRate = getCurrentTariffRate();
     document.getElementById('date').value = today;
     
     // Set default import dates (last 7 days)
@@ -54,15 +64,18 @@ function setDefaultDate() {
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     document.getElementById('importDateFrom').value = sevenDaysAgo.toISOString().split('T')[0];
     document.getElementById('importDateTo').value = today;
-    document.getElementById('tariffRate').value = '7.0';
-    document.getElementById('importTariffRate').value = '7.0';
+    document.getElementById('tariffRate').value = currentTariffRate.toFixed(2);
+    document.getElementById('importTariffRate').value = currentTariffRate.toFixed(2);
     if (document.getElementById('vehicle')) document.getElementById('vehicle').value = 'Kia EV5';
     setPillValue('vehicle', 'Kia EV5');
     if (document.getElementById('mileageVehicle')) document.getElementById('mileageVehicle').value = 'Kia EV5';
     setPillValue('mileageVehicle', 'Kia EV5');
     if (document.getElementById('mileageDate')) document.getElementById('mileageDate').value = today;
     if (document.getElementById('mileageTime')) document.getElementById('mileageTime').value = formatTimeInput(now);
+    if (document.getElementById('tariffRateValue')) document.getElementById('tariffRateValue').value = currentTariffRate.toFixed(2);
+    if (document.getElementById('tariffEffectiveDate')) document.getElementById('tariffEffectiveDate').value = today;
     updateMileageCurrentInfo();
+    updateTariffUi();
 }
 
 function setupVehicleFilter() {
@@ -134,6 +147,15 @@ function setupMileageForm() {
     });
 }
 
+function setupTariffForm() {
+    const form = document.getElementById('tariffForm');
+    if (!form) return;
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await saveTariffChange();
+    });
+}
+
 async function ensureSessionsLoaded(force = false) {
     if (!force && sessionsLoaded) return allSessionsCache;
 
@@ -176,6 +198,48 @@ async function loadMileageHistory(force = false) {
     mileageLoaded = true;
     updateMileageCurrentInfo();
     return mileageReadingsCache;
+}
+
+async function loadTariffHistory(force = false) {
+    if (!force && tariffLoaded) {
+        updateTariffUi();
+        return tariffHistoryCache;
+    }
+
+    const response = await fetch(`${API_URL}/tariff-rates`);
+    const data = await parseApiJson(response, 'tariff history');
+    tariffHistoryCache = Array.isArray(data.history) ? data.history : [];
+    activeTariffEntry = data.activeEntry || null;
+    tariffLoaded = true;
+    updateTariffUi();
+    return tariffHistoryCache;
+}
+
+async function parseApiJson(response, label) {
+    const contentType = response.headers.get('content-type') || '';
+    const rawText = await response.text();
+    let data = null;
+
+    if (rawText) {
+        if (contentType.includes('application/json')) {
+            try {
+                data = JSON.parse(rawText);
+            } catch (error) {
+                throw new Error(`Invalid JSON returned for ${label}.`);
+            }
+        } else if (response.ok) {
+            throw new Error(`Unexpected response format for ${label}.`);
+        }
+    }
+
+    if (!response.ok) {
+        if (response.status === 404) {
+            throw new Error(`Tariff API unavailable (404). Restart the server so the new /api/tariff-rates route is loaded.`);
+        }
+        throw new Error(data?.error || `Failed to load ${label}.`);
+    }
+
+    return data || {};
 }
 
 // Load and display all sessions
@@ -629,6 +693,85 @@ function formatMileageTimestamp(timestamp) {
     });
 }
 
+function getCurrentTariffRate() {
+    const rate = Number(activeTariffEntry?.rate);
+    return Number.isFinite(rate) ? rate : 7.0;
+}
+
+function updateTariffUi() {
+    const currentRate = getCurrentTariffRate();
+    const effectiveDate = activeTariffEntry?.effectiveDate || '2026-01-01';
+    const autoDetectLabel = document.getElementById('autoDetectRateLabel');
+    const autoTariffHint = document.getElementById('autoTariffHint');
+    const manualTariffHint = document.getElementById('manualTariffHint');
+    const tariffCurrentInfo = document.getElementById('tariffCurrentInfo');
+    const manualTariffInput = document.getElementById('tariffRate');
+    const importTariffInput = document.getElementById('importTariffRate');
+    const tariffRateValueInput = document.getElementById('tariffRateValue');
+
+    if (autoDetectLabel) {
+        autoDetectLabel.textContent = `Use tariff history (currently ${currentRate.toFixed(2)}p/kWh)`;
+    }
+    if (autoTariffHint) {
+        autoTariffHint.textContent = 'Applies the tariff active on each session date';
+    }
+    if (manualTariffHint) {
+        manualTariffHint.textContent = `Default: ${currentRate.toFixed(2)}p (active from ${effectiveDate})`;
+    }
+    if (tariffCurrentInfo) {
+        tariffCurrentInfo.textContent = `Current active tariff: ${currentRate.toFixed(2)}p/kWh from ${effectiveDate}`;
+    }
+    if (manualTariffInput) {
+        manualTariffInput.value = currentRate.toFixed(2);
+    }
+    if (importTariffInput) {
+        importTariffInput.value = currentRate.toFixed(2);
+    }
+    if (tariffRateValueInput) {
+        tariffRateValueInput.value = currentRate.toFixed(2);
+    }
+    renderTariffHistory();
+}
+
+function renderTariffHistory() {
+    const listEl = document.getElementById('tariffHistoryList');
+    if (!listEl) return;
+
+    if (!Array.isArray(tariffHistoryCache) || !tariffHistoryCache.length) {
+        listEl.innerHTML = '<p class="tariff-history-empty">No tariff history yet.</p>';
+        return;
+    }
+
+    const activeKey = activeTariffEntry
+        ? `${activeTariffEntry.effectiveDate}|${Number(activeTariffEntry.rate).toFixed(2)}`
+        : null;
+
+    const items = [...tariffHistoryCache].sort((a, b) => {
+        if (a.effectiveDate === b.effectiveDate) {
+            return Number(b.rate) - Number(a.rate);
+        }
+        return b.effectiveDate.localeCompare(a.effectiveDate);
+    });
+
+    listEl.innerHTML = items.map((entry) => {
+        const rate = Number(entry.rate);
+        const rateLabel = Number.isFinite(rate) ? `${rate.toFixed(2)}p/kWh` : '--';
+        const entryKey = `${entry.effectiveDate}|${Number(entry.rate).toFixed(2)}`;
+        const isActive = entryKey === activeKey;
+        return `
+            <div class="tariff-history-item${isActive ? ' active' : ''}">
+                <div>
+                    <div class="tariff-history-rate">${rateLabel}</div>
+                    <div class="tariff-history-date">From ${entry.effectiveDate}</div>
+                </div>
+                <div class="tariff-history-meta">
+                    ${isActive ? '<span class="tariff-history-badge">Active</span>' : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
 function updateMileageCurrentInfo() {
     const infoEl = document.getElementById('mileageCurrentInfo');
     const vehicle = document.getElementById('mileageVehicle')?.value;
@@ -774,6 +917,10 @@ function setupModals() {
             document.getElementById('mileageForm').reset();
             setDefaultDate();
         }
+        if (modal.id === 'tariffModal') {
+            document.getElementById('tariffForm').reset();
+            setDefaultDate();
+        }
     }
     
     // Close buttons
@@ -872,7 +1019,7 @@ async function importFromOctopus() {
     // Disable button and show loading
     importButton.disabled = true;
     importButton.textContent = 'Importing...';
-    const rateMsg = autoDetectRate ? 'auto-detecting rates' : `using ${tariffRate}p/kWh`;
+    const rateMsg = autoDetectRate ? 'using tariff history' : `using ${tariffRate}p/kWh`;
     showImportStatus(`Fetching completed dispatches from Octopus GraphQL (${rateMsg})...`, 'info');
     
     try {
@@ -1056,5 +1203,39 @@ async function saveMileageReading() {
     } catch (error) {
         console.error('Error saving mileage:', error);
         alert(error.message || 'Failed to save mileage');
+    }
+}
+
+async function saveTariffChange() {
+    const rate = parseFloat(document.getElementById('tariffRateValue').value);
+    const effectiveDate = document.getElementById('tariffEffectiveDate').value;
+
+    if (!Number.isFinite(rate) || rate < 0 || !effectiveDate) {
+        alert('Please enter a tariff rate and effective date.');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/tariff-rates`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                rate,
+                effectiveDate
+            })
+        });
+
+        await parseApiJson(response, 'tariff save');
+
+        await loadTariffHistory(true);
+        document.getElementById('tariffModal').style.display = 'none';
+        document.body.style.overflow = 'auto';
+        document.getElementById('tariffForm').reset();
+        setDefaultDate();
+    } catch (error) {
+        console.error('Error saving tariff:', error);
+        alert(error.message || 'Failed to save tariff');
     }
 }

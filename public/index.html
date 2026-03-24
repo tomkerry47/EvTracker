@@ -26,7 +26,7 @@
                 <h3>Total Cost</h3>
                 <p class="stat-value" id="totalCost">£0.00</p>
             </div>
-            <div class="stat-card">
+            <div class="stat-card stat-card-insight">
                 <h3>Cost / Mile</h3>
                 <p class="stat-value" id="costPerMile">--</p>
                 <p class="stat-meta" id="costPerMileMeta">Add mileage updates to start tracking</p>
@@ -45,6 +45,9 @@
             <button data-open-modal="mileageModal" class="btn btn-secondary">
                 🚗 Update Mileage
             </button>
+            <button data-open-modal="tariffModal" class="btn btn-secondary">
+                💷 Change Tariff
+            </button>
             <button data-open-modal="importModal" class="btn btn-secondary">
                 🐙 Import Sessions
             </button>
@@ -56,6 +59,7 @@
             <div id="mobileFabMenu" class="mobile-fab-menu">
                 <button data-open-modal="manualEntryModal" class="btn btn-primary">Manual Entry</button>
                 <button data-open-modal="mileageModal" class="btn btn-secondary">Update Mileage</button>
+                <button data-open-modal="tariffModal" class="btn btn-secondary">Change Tariff</button>
                 <button data-open-modal="importModal" class="btn btn-secondary">Import Sessions</button>
             </div>
         </div>
@@ -100,7 +104,7 @@
                     <div class="form-group">
                         <label for="tariffRate">Tariff Rate (p/kWh)</label>
                         <input type="number" id="tariffRate" step="0.01" min="0" value="7.0" required>
-                        <small>Default: 7.0p (Octopus Intelligent Go off-peak)</small>
+                        <small id="manualTariffHint">Default: 7.0p (active tariff)</small>
                     </div>
                     <div class="form-group">
                         <label for="cost">Cost (£)</label>
@@ -152,9 +156,9 @@
                     <div class="form-group">
                         <label>
                             <input type="checkbox" id="autoDetectRate" checked>
-                            Use Intelligent Octopus Go rate (7.0p/kWh for all EV charging)
+                            <span id="autoDetectRateLabel">Use tariff history (currently 7.0p/kWh)</span>
                         </label>
-                        <small>Uncheck to set a custom rate</small>
+                        <small id="autoTariffHint">Applies the tariff active on each session date</small>
                     </div>
                     <div class="form-group" id="manualRateGroup" style="display: none;">
                         <label for="importTariffRate">Fixed Tariff Rate (p/kWh)</label>
@@ -204,6 +208,42 @@
                     <div class="form-actions">
                         <button type="submit" class="btn btn-primary">Save Mileage</button>
                         <button type="button" class="btn-cancel" data-modal="mileageModal">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Tariff Modal -->
+        <div id="tariffModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Change Tariff Rate</h2>
+                    <span class="close" data-modal="tariffModal">&times;</span>
+                </div>
+                <p class="form-description">Add a new tariff rate with the date it becomes active. Use a single start date only. It stays in effect until the next change.</p>
+                <form id="tariffForm" novalidate>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="tariffRateValue">Rate (p/kWh)</label>
+                            <input type="number" id="tariffRateValue" step="0.01" min="0" required>
+                            <small>Example: enter 7 for 7p/kWh</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="tariffEffectiveDate">Effective Date</label>
+                            <input type="date" id="tariffEffectiveDate" required>
+                            <small>Use the start date only, for example 2026-01-01</small>
+                        </div>
+                    </div>
+                    <div class="mileage-current" id="tariffCurrentInfo">Loading active tariff…</div>
+                    <div class="tariff-history-panel">
+                        <h3>Tariff History</h3>
+                        <div id="tariffHistoryList" class="tariff-history-list">
+                            <p class="tariff-history-empty">Loading tariff history…</p>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Save Tariff</button>
+                        <button type="button" class="btn-cancel" data-modal="tariffModal">Cancel</button>
                     </div>
                 </form>
             </div>

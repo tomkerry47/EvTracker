@@ -10,6 +10,11 @@
 const { Pool } = require('pg');
 const axios = require('axios');
 const OctopusClient = require('../lib/octopus-client');
+const {
+  getActiveTariffRate,
+  getTariffHistory,
+  resolveTariffRateForDate
+} = require('../lib/tariff-settings');
 
 function formatUkDate(date) {
   return new Intl.DateTimeFormat('en-CA', {
@@ -275,6 +280,10 @@ async function importDailyCharges() {
       }
     );
     console.log('✅ Octopus client initialized');
+    const tariffHistory = await getTariffHistory(pool);
+    const fallbackTariffRate = octopusClient.getIntelligentOctopusChargingRate();
+    const activeTariffRate = getActiveTariffRate(tariffHistory, new Date(), fallbackTariffRate);
+    console.log(`💷 Active tariff rate: ${activeTariffRate}p/kWh`);
     
     // Calculate date range (last 3 days to handle completedDispatches lag safely)
     const dateTo = new Date();
@@ -286,7 +295,8 @@ async function importDailyCharges() {
     const result = await octopusClient.importSessionsFromCompletedDispatches({
       dateFrom: dateFrom.toISOString().split('T')[0],
       dateTo: dateTo.toISOString().split('T')[0],
-      tariffRate: octopusClient.getIntelligentOctopusChargingRate(),
+      tariffRate: activeTariffRate,
+      tariffResolver: (value) => resolveTariffRateForDate(tariffHistory, value, fallbackTariffRate),
       gapMinutes: 240,
       accountNumber: process.env.OCTOPUS_ACCOUNT_NUMBER || undefined,
       vehicle: process.env.DEFAULT_VEHICLE || null

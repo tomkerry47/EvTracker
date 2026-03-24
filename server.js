@@ -3,6 +3,13 @@ const express = require('express');
 const { Pool } = require('pg');
 const axios = require('axios');
 const OctopusEnergyClient = require('./lib/octopus-client');
+const {
+  appendTariffHistoryEntry,
+  getActiveTariffEntry,
+  getActiveTariffRate,
+  getTariffHistory,
+  resolveTariffRateForDate
+} = require('./lib/tariff-settings');
 const { version: packageVersion } = require('./package.json');
 
 const app = express();
@@ -628,7 +635,11 @@ app.post('/api/octopus/import', async (req, res) => {
     console.log('Auto-detect rate:', autoDetectRate);
 
     // Import sessions from completedDispatches GraphQL.
-    const effectiveTariffRate = autoDetectRate ? octopusClient.getIntelligentOctopusChargingRate() : (tariffRate || 7.0);
+    const fallbackTariffRate = octopusClient.getIntelligentOctopusChargingRate();
+    const tariffHistory = autoDetectRate ? await getTariffHistory(pool) : [];
+    const effectiveTariffRate = autoDetectRate
+      ? getActiveTariffRate(tariffHistory, new Date(), fallbackTariffRate)
+      : (tariffRate || fallbackTariffRate);
     const parsedGapHours = Number(mergeGapHours);
     const gapHours = Number.isFinite(parsedGapHours) && parsedGapHours >= 0 ? parsedGapHours : 4;
     const gapMinutes = gapHours * 60;
@@ -636,6 +647,9 @@ app.post('/api/octopus/import', async (req, res) => {
       dateFrom,
       dateTo,
       tariffRate: effectiveTariffRate,
+      tariffResolver: autoDetectRate
+        ? (value) => resolveTariffRateForDate(tariffHistory, value, fallbackTariffRate)
+        : null,
       gapMinutes,
       accountNumber: accountNumber || undefined,
       vehicle: vehicle || null
@@ -989,6 +1003,44 @@ app.get('/api/settings/:key', async (req, res) => {
   } catch (error) {
     console.error('Error getting setting:', error);
     res.status(500).json({ error: 'Failed to get setting' });
+  }
+});
+
+app.get('/api/tariff-rates', async (req, res) => {
+  try {
+    const history = await getTariffHistory(pool);
+    const activeEntry = getActiveTariffEntry(history, new Date());
+    res.json({
+      history,
+      activeEntry,
+      activeRate: activeEntry.rate
+    });
+  } catch (error) {
+    console.error('Error getting tariff history:', error);
+    res.status(500).json({ error: 'Failed to get tariff history' });
+  }
+});
+
+app.post('/api/tariff-rates', async (req, res) => {
+  try {
+    const result = await appendTariffHistoryEntry(pool, req.body);
+    if (!result) {
+      return res.status(400).json({
+        error: 'rate and effectiveDate are required.'
+      });
+    }
+
+    const activeEntry = getActiveTariffEntry(result.history, new Date());
+    res.status(201).json({
+      success: true,
+      entry: result.entry,
+      history: result.history,
+      activeEntry,
+      activeRate: activeEntry.rate
+    });
+  } catch (error) {
+    console.error('Error saving tariff history:', error);
+    res.status(500).json({ error: 'Failed to save tariff history' });
   }
 });
 
