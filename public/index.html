@@ -127,6 +127,51 @@
             </div>
         </div>
 
+        <div id="splitSessionModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Split Imported Session</h2>
+                    <span class="close" data-modal="splitSessionModal">&times;</span>
+                </div>
+                <p class="form-description" id="splitSessionSummary">
+                    Move selected dispatch blocks into a second session for the other car.
+                </p>
+                <form id="splitSessionForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="splitOriginalVehicle">Keep remaining blocks on</label>
+                            <input type="hidden" id="splitOriginalVehicle" value="Kia EV5">
+                            <div class="pill-group" data-target-input="splitOriginalVehicle">
+                                <button type="button" class="pill-btn active" data-value="Kia EV5">Kia EV5</button>
+                                <button type="button" class="pill-btn" data-value="Peugeot E-2008">Peugeot E-2008</button>
+                                <button type="button" class="pill-btn" data-value="Other">Other</button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="splitNewVehicle">Move selected blocks to</label>
+                            <input type="hidden" id="splitNewVehicle" value="Peugeot E-2008">
+                            <div class="pill-group" data-target-input="splitNewVehicle">
+                                <button type="button" class="pill-btn" data-value="Kia EV5">Kia EV5</button>
+                                <button type="button" class="pill-btn active" data-value="Peugeot E-2008">Peugeot E-2008</button>
+                                <button type="button" class="pill-btn" data-value="Other">Other</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="split-session-panel">
+                        <div class="split-session-panel-header">
+                            <h3>Dispatch blocks</h3>
+                            <p id="splitSelectionSummary">Choose the blocks that belong to the second car.</p>
+                        </div>
+                        <div id="splitSessionBlocks" class="split-session-blocks"></div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Create Split Session</button>
+                        <button type="button" class="btn-cancel" data-modal="splitSessionModal">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- Import Modal -->
         <div id="importModal" class="modal">
             <div class="modal-content">

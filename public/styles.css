@@ -305,6 +305,12 @@ header h1 {
     color: white;
 }
 
+.split-session-btn {
+    padding: 8px 14px;
+    font-size: 0.85em;
+    min-width: auto;
+}
+
 .btn-danger {
     background: #FF6B6B;
     color: white;
@@ -616,6 +622,13 @@ header h1 {
     justify-content: flex-end;
 }
 
+.session-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
 .session-pill-btn {
     padding: 6px 10px;
     font-size: 0.78em;
@@ -756,7 +769,7 @@ header h1 {
         display: grid;
         grid-template-columns: 1fr auto;
         grid-template-areas:
-            "date delete"
+            "date actions"
             "pills pills";
         align-items: start;
         gap: 8px 10px;
@@ -770,9 +783,11 @@ header h1 {
         gap: 6px;
     }
 
-    .session-header .btn-danger {
-        grid-area: delete;
-        align-self: start;
+    .session-actions {
+        grid-area: actions;
+        justify-self: end;
+        flex-wrap: wrap;
+        justify-content: flex-end;
     }
 
     .session-vehicle-pills {
@@ -785,6 +800,10 @@ header h1 {
 
     .session-source {
         margin-left: 0;
+    }
+
+    .split-session-btn {
+        padding: 6px 10px;
     }
     
     .detail-label {
@@ -910,6 +929,16 @@ header h1 {
         color: #d64545;
         border: 1px solid #f3b1b1;
         box-shadow: none;
+    }
+
+    .session-actions {
+        gap: 6px;
+    }
+
+    .split-session-btn {
+        min-height: 0;
+        padding: 5px 10px;
+        border-radius: 999px;
     }
 
     .session-header .btn-danger .delete-icon {
@@ -1239,6 +1268,79 @@ header h1 {
     color: #2F5A8A;
     font-size: 0.9em;
     line-height: 1.5;
+    font-weight: 600;
+}
+
+.split-session-panel {
+    margin-top: 14px;
+    border: 1px solid #D8E5FB;
+    border-radius: 14px;
+    background: #FBFDFF;
+    padding: 14px;
+}
+
+.split-session-panel-header {
+    margin-bottom: 12px;
+}
+
+.split-session-panel-header h3 {
+    margin: 0 0 6px;
+    font-size: 1em;
+    color: #2F5A8A;
+}
+
+.split-session-panel-header p {
+    margin: 0;
+    color: #5E6D82;
+    font-size: 0.9em;
+    line-height: 1.45;
+}
+
+.split-session-blocks {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.split-block-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid #DCE6F5;
+    background: white;
+    cursor: pointer;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.split-block-option:hover {
+    border-color: #8EB4E8;
+    box-shadow: 0 6px 18px rgba(74, 144, 226, 0.08);
+    transform: translateY(-1px);
+}
+
+.split-block-option input {
+    margin-top: 3px;
+    width: 18px;
+    height: 18px;
+    accent-color: #4A90E2;
+}
+
+.split-block-main {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.split-block-time {
+    font-weight: 700;
+    color: #111111;
+}
+
+.split-block-meta {
+    font-size: 0.88em;
+    color: #5E6D82;
     font-weight: 600;
 }
 

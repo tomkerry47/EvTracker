@@ -119,6 +119,56 @@ function normalizeBlock(block, tariffRate) {
   };
 }
 
+function buildSessionFromBlocks(blocks, tariffRate, octopusSessionId) {
+  const normalizedBlocks = (Array.isArray(blocks) ? blocks : [])
+    .map((block) => normalizeBlock(block, tariffRate))
+    .filter((block) => block.start && block.end)
+    .sort((a, b) => new Date(a.start) - new Date(b.start));
+
+  if (!normalizedBlocks.length) return null;
+
+  const startDate = new Date(normalizedBlocks[0].start);
+  const endDate = new Date(normalizedBlocks[normalizedBlocks.length - 1].end);
+  const totalKwh = normalizedBlocks.reduce((sum, block) => sum + (parseFloat(block.charged_kwh) || 0), 0);
+  const totalCost = normalizedBlocks.reduce((sum, block) => sum + (parseFloat(block.cost) || 0), 0);
+
+  return {
+    date: formatUkDate(startDate),
+    startTime: formatUkTime(startDate),
+    endTime: formatUkTime(endDate),
+    energyAdded: parseFloat(totalKwh.toFixed(3)),
+    cost: parseFloat(totalCost.toFixed(2)),
+    dispatchCount: normalizedBlocks.length,
+    dispatchBlocks: normalizedBlocks,
+    octopusSessionId: octopusSessionId || `${startDate.toISOString()}_${endDate.toISOString()}_${normalizedBlocks.length}`
+  };
+}
+
+function sessionRowToApi(session) {
+  const dateStr = session.date instanceof Date
+    ? session.date.toISOString().split('T')[0]
+    : session.date;
+
+  return {
+    id: session.id,
+    date: dateStr,
+    startTime: session.start_time,
+    endTime: session.end_time,
+    energyAdded: parseFloat(session.energy_added),
+    startSoC: session.start_soc,
+    endSoC: session.end_soc,
+    tariffRate: parseFloat(session.tariff_rate),
+    cost: parseFloat(session.cost),
+    notes: session.notes,
+    source: session.source || 'manual',
+    vehicle: session.vehicle || null,
+    octopusSessionId: session.octopus_session_id || null,
+    dispatchCount: session.dispatch_count || null,
+    dispatchBlocks: session.dispatch_blocks || null,
+    createdAt: session.created_at
+  };
+}
+
 function mergeSessionBlocks(existingSession, incomingSession, tariffRate, gapMinutes) {
   const existingBlocks = Array.isArray(existingSession.dispatch_blocks)
     ? existingSession.dispatch_blocks
@@ -353,31 +403,7 @@ app.get('/api/sessions', async (req, res) => {
     }
     
     // Transform data to match frontend expectations (camelCase)
-    const sessions = result.rows.map(session => {
-      // Convert Date object to YYYY-MM-DD string to avoid timezone issues
-      const dateStr = session.date instanceof Date 
-        ? session.date.toISOString().split('T')[0]
-        : session.date;
-      
-      return {
-        id: session.id,
-        date: dateStr,
-        startTime: session.start_time,
-        endTime: session.end_time,
-        energyAdded: parseFloat(session.energy_added),
-        startSoC: session.start_soc,
-        endSoC: session.end_soc,
-        tariffRate: parseFloat(session.tariff_rate),
-        cost: parseFloat(session.cost),
-        notes: session.notes,
-        source: session.source || 'manual',
-        vehicle: session.vehicle || null,
-        octopusSessionId: session.octopus_session_id,
-        dispatchCount: session.dispatch_count || null,
-        dispatchBlocks: session.dispatch_blocks || null,
-        createdAt: session.created_at
-      };
-    });
+    const sessions = result.rows.map(sessionRowToApi);
     
     console.log('=== Transformed for frontend ===');
     if (sessions.length > 0) {
@@ -409,25 +435,7 @@ app.get('/api/sessions/:id', async (req, res) => {
     const data = result.rows[0];
     
     // Transform data to match frontend expectations (camelCase)
-    const session = {
-      id: data.id,
-      date: data.date,
-      startTime: data.start_time,
-      endTime: data.end_time,
-      energyAdded: parseFloat(data.energy_added),
-      startSoC: data.start_soc,
-      endSoC: data.end_soc,
-      tariffRate: parseFloat(data.tariff_rate),
-      cost: parseFloat(data.cost),
-      notes: data.notes,
-      source: data.source || 'manual',
-      vehicle: data.vehicle || null,
-      dispatchCount: data.dispatch_count || null,
-      dispatchBlocks: data.dispatch_blocks || null,
-      createdAt: data.created_at
-    };
-    
-    res.json(session);
+    res.json(sessionRowToApi(data));
   } catch (error) {
     console.error('Error fetching session:', error);
     res.status(500).json({ error: 'Failed to read session' });
@@ -467,25 +475,7 @@ app.post('/api/sessions', async (req, res) => {
     const data = result.rows[0];
     
     // Transform response back to camelCase
-    const newSession = {
-      id: data.id,
-      date: data.date,
-      startTime: data.start_time,
-      endTime: data.end_time,
-      energyAdded: parseFloat(data.energy_added),
-      startSoC: data.start_soc,
-      endSoC: data.end_soc,
-      tariffRate: parseFloat(data.tariff_rate),
-      cost: parseFloat(data.cost),
-      notes: data.notes,
-      source: data.source || 'manual',
-      vehicle: data.vehicle || null,
-      dispatchCount: data.dispatch_count || null,
-      dispatchBlocks: data.dispatch_blocks || null,
-      createdAt: data.created_at
-    };
-    
-    res.status(201).json(newSession);
+    res.status(201).json(sessionRowToApi(data));
   } catch (error) {
     console.error('Error creating session:', error);
     // Handle unique constraint violation for duplicate octopus sessions
@@ -493,6 +483,143 @@ app.post('/api/sessions', async (req, res) => {
       return res.status(409).json({ error: 'Session already imported' });
     }
     res.status(500).json({ error: 'Failed to create session' });
+  }
+});
+
+app.post('/api/sessions/:id/split', async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const selectedBlockKeys = Array.isArray(req.body.selectedBlockKeys)
+      ? req.body.selectedBlockKeys.map((key) => String(key))
+      : [];
+    const originalVehicle = req.body.originalVehicle || null;
+    const newVehicle = req.body.newVehicle || null;
+
+    if (!selectedBlockKeys.length) {
+      return res.status(400).json({ error: 'Select at least one dispatch block to move' });
+    }
+
+    if (!newVehicle) {
+      return res.status(400).json({ error: 'Choose a vehicle for the new session' });
+    }
+
+    await client.query('BEGIN');
+
+    const existingResult = await client.query(
+      'SELECT * FROM charging_sessions WHERE id = $1 FOR UPDATE',
+      [req.params.id]
+    );
+
+    if (!existingResult.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const existing = existingResult.rows[0];
+    const existingBlocks = Array.isArray(existing.dispatch_blocks) ? existing.dispatch_blocks : [];
+
+    if (existingBlocks.length < 2) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'This session cannot be split because it has fewer than two dispatch blocks' });
+    }
+
+    const selectedKeySet = new Set(selectedBlockKeys);
+    const retainedBlocks = [];
+    const movedBlocks = [];
+
+    existingBlocks.forEach((block) => {
+      const key = `${block.start}|${block.end}`;
+      if (selectedKeySet.has(key)) {
+        movedBlocks.push(block);
+      } else {
+        retainedBlocks.push(block);
+      }
+    });
+
+    if (!movedBlocks.length || !retainedBlocks.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'The selected blocks must leave some charge on both sessions' });
+    }
+
+    const originalSession = buildSessionFromBlocks(
+      retainedBlocks,
+      parseFloat(existing.tariff_rate) || 0,
+      existing.octopus_session_id || null
+    );
+    const splitSuffix = Date.now().toString(36);
+    const newSessionMeta = buildSessionFromBlocks(
+      movedBlocks,
+      parseFloat(existing.tariff_rate) || 0,
+      `${existing.octopus_session_id || existing.id}-split-${splitSuffix}`
+    );
+
+    if (!originalSession || !newSessionMeta) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Unable to derive valid split sessions from the selected dispatch blocks' });
+    }
+
+    const updatedOriginalResult = await client.query(
+      `UPDATE charging_sessions
+       SET date = $1,
+           start_time = $2,
+           end_time = $3,
+           energy_added = $4,
+           cost = $5,
+           vehicle = $6,
+           dispatch_count = $7,
+           dispatch_blocks = $8
+       WHERE id = $9
+       RETURNING *`,
+      [
+        originalSession.date,
+        originalSession.startTime,
+        originalSession.endTime,
+        originalSession.energyAdded,
+        originalSession.cost,
+        originalVehicle,
+        originalSession.dispatchCount,
+        JSON.stringify(originalSession.dispatchBlocks),
+        existing.id
+      ]
+    );
+
+    const newSessionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const newSessionResult = await client.query(
+      `INSERT INTO charging_sessions
+        (id, date, start_time, end_time, energy_added, start_soc, end_soc, tariff_rate, cost, notes, source, vehicle, octopus_session_id, dispatch_count, dispatch_blocks)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+       RETURNING *`,
+      [
+        newSessionId,
+        newSessionMeta.date,
+        newSessionMeta.startTime,
+        newSessionMeta.endTime,
+        newSessionMeta.energyAdded,
+        existing.start_soc,
+        existing.end_soc,
+        existing.tariff_rate,
+        newSessionMeta.cost,
+        existing.notes,
+        existing.source || 'octopus-graphql',
+        newVehicle,
+        newSessionMeta.octopusSessionId,
+        newSessionMeta.dispatchCount,
+        JSON.stringify(newSessionMeta.dispatchBlocks)
+      ]
+    );
+
+    await client.query('COMMIT');
+    res.status(201).json({
+      updatedSession: sessionRowToApi(updatedOriginalResult.rows[0]),
+      newSession: sessionRowToApi(newSessionResult.rows[0])
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error splitting session:', error);
+    res.status(500).json({ error: 'Failed to split session' });
+  } finally {
+    client.release();
   }
 });
 
@@ -566,25 +693,7 @@ app.put('/api/sessions/:id', async (req, res) => {
     const data = result.rows[0];
     
     // Transform response back to camelCase
-    const session = {
-      id: data.id,
-      date: data.date,
-      startTime: data.start_time,
-      endTime: data.end_time,
-      energyAdded: parseFloat(data.energy_added),
-      startSoC: data.start_soc,
-      endSoC: data.end_soc,
-      tariffRate: parseFloat(data.tariff_rate),
-      cost: parseFloat(data.cost),
-      notes: data.notes,
-      source: data.source || 'manual',
-      vehicle: data.vehicle || null,
-      dispatchCount: data.dispatch_count || null,
-      dispatchBlocks: data.dispatch_blocks || null,
-      createdAt: data.created_at
-    };
-    
-    res.json(session);
+    res.json(sessionRowToApi(data));
   } catch (error) {
     console.error('Error updating session:', error);
     res.status(500).json({ error: 'Failed to update session' });

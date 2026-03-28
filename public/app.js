@@ -12,6 +12,7 @@ let mileageLoaded = false;
 let tariffHistoryCache = [];
 let activeTariffEntry = null;
 let tariffLoaded = false;
+let currentSplitSessionId = null;
 
 // Load sessions on page load
 document.addEventListener('DOMContentLoaded', async () => {
@@ -23,6 +24,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupAutoDetectRateToggle();
     setupFilterButtons();
     setupVehicleFilter();
+    setupSplitSessionForm();
     setupMileageForm();
     setupTariffForm();
     setupMobileFab();
@@ -302,6 +304,15 @@ function displaySessions(sessions) {
     sessions.sort((a, b) => new Date(b.date + ' ' + b.startTime) - new Date(a.date + ' ' + a.startTime));
     
     container.innerHTML = sessions.map(session => createSessionCard(session)).join('');
+
+    document.querySelectorAll('.split-session-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const button = e.target.closest('.split-session-btn');
+            const id = button ? button.dataset.id : null;
+            if (!id) return;
+            openSplitSessionModal(id);
+        });
+    });
     
     // Add delete event listeners
     document.querySelectorAll('.delete-btn').forEach(btn => {
@@ -328,6 +339,11 @@ function createSessionCard(session) {
     const sourceBadge = `<span class="session-source ${source}">${isAutoSource ? 'OCTOPUS AUTO' : 'MANUAL'}</span>`;
     const vehiclePills = isAutoSource ? renderSessionVehiclePills(session) : '';
     const dispatchBlocks = Array.isArray(session.dispatchBlocks) ? session.dispatchBlocks : [];
+    const splitButton = canSplitSession(session) ? `
+                <button class="btn btn-secondary split-session-btn" data-id="${session.id}" title="Split this imported session">
+                    Split
+                </button>
+    ` : '';
     const dispatchGraph = dispatchBlocks.length ? `
         <div class="dispatch-graph">
             ${buildDispatchBars(dispatchBlocks, parseFloat(session.tariffRate) || 7.0)}
@@ -350,7 +366,10 @@ function createSessionCard(session) {
                     ${sourceBadge}
                 </div>
                 ${vehiclePills}
-                ${deleteButton}
+                <div class="session-actions">
+                    ${splitButton}
+                    ${deleteButton}
+                </div>
             </div>
             <div class="session-details">
                 <div class="detail-item">
@@ -395,6 +414,11 @@ function renderSessionVehiclePills(session) {
             `).join('')}
         </div>
     `;
+}
+
+function canSplitSession(session) {
+    const dispatchBlocks = Array.isArray(session.dispatchBlocks) ? session.dispatchBlocks : [];
+    return (session.source || '').startsWith('octopus') && dispatchBlocks.length > 1;
 }
 
 function setupSessionVehiclePills() {
@@ -480,6 +504,20 @@ function buildDispatchBars(dispatchBlocks, tariffRate) {
     }).join('');
 }
 
+function getDispatchBlockKey(block) {
+    return `${block?.start || ''}|${block?.end || ''}`;
+}
+
+function getDispatchBlockEnergy(block) {
+    return Math.abs(parseFloat(block?.charged_kwh ?? block?.charge_in_kwh ?? 0) || 0);
+}
+
+function getDispatchBlockCost(block, tariffRate) {
+    const explicitCost = parseFloat(block?.cost);
+    if (Number.isFinite(explicitCost)) return explicitCost;
+    return getDispatchBlockEnergy(block) * (parseFloat(tariffRate) || 0) / 100;
+}
+
 function formatUkTime(date) {
     return new Intl.DateTimeFormat('en-GB', {
         timeZone: 'Europe/London',
@@ -487,6 +525,176 @@ function formatUkTime(date) {
         minute: '2-digit',
         hour12: false
     }).format(date);
+}
+
+function formatUkDateLong(dateStr) {
+    const date = new Date(`${dateStr}T12:00:00`);
+    return new Intl.DateTimeFormat('en-GB', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric'
+    }).format(date);
+}
+
+function getDefaultSplitTargetVehicle(currentVehicle) {
+    if (currentVehicle === 'Kia EV5') return 'Peugeot E-2008';
+    if (currentVehicle === 'Peugeot E-2008') return 'Kia EV5';
+    return 'Kia EV5';
+}
+
+function openSplitSessionModal(sessionId) {
+    const session = allSessionsCache.find((entry) => entry.id === sessionId);
+    const modal = document.getElementById('splitSessionModal');
+    const blocksContainer = document.getElementById('splitSessionBlocks');
+    const summary = document.getElementById('splitSessionSummary');
+
+    if (!session || !canSplitSession(session) || !modal || !blocksContainer || !summary) {
+        alert('This session cannot be split.');
+        return;
+    }
+
+    currentSplitSessionId = session.id;
+
+    const currentVehicle = getSessionVehicle(session) || 'Kia EV5';
+    const targetVehicle = getDefaultSplitTargetVehicle(currentVehicle);
+    document.getElementById('splitOriginalVehicle').value = currentVehicle;
+    document.getElementById('splitNewVehicle').value = targetVehicle;
+    setPillValue('splitOriginalVehicle', currentVehicle);
+    setPillValue('splitNewVehicle', targetVehicle);
+
+    summary.textContent = `${formatUkDateLong(session.date)} ${session.startTime}-${session.endTime}. Pick the dispatch blocks that should move into a second session.`;
+
+    const sortedBlocks = [...session.dispatchBlocks].sort((a, b) => new Date(a.start) - new Date(b.start));
+    blocksContainer.innerHTML = sortedBlocks.map((block) => {
+        const start = new Date(block.start);
+        const end = new Date(block.end);
+        const startTime = Number.isNaN(start.getTime()) ? '--:--' : formatUkTime(start);
+        const endTime = Number.isNaN(end.getTime()) ? '--:--' : formatUkTime(end);
+        const energy = getDispatchBlockEnergy(block);
+        const cost = getDispatchBlockCost(block, session.tariffRate);
+        const key = getDispatchBlockKey(block);
+        return `
+            <label class="split-block-option">
+                <input type="checkbox" class="split-block-checkbox" value="${key}">
+                <span class="split-block-main">
+                    <span class="split-block-time">${startTime}-${endTime}</span>
+                    <span class="split-block-meta">${energy.toFixed(2)}kWh · £${cost.toFixed(2)}</span>
+                </span>
+            </label>
+        `;
+    }).join('');
+
+    blocksContainer.querySelectorAll('.split-block-checkbox').forEach((checkbox) => {
+        checkbox.addEventListener('change', updateSplitSelectionSummary);
+    });
+
+    updateSplitSelectionSummary();
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    closeMobileFab();
+}
+
+function resetSplitSessionModal() {
+    currentSplitSessionId = null;
+    const form = document.getElementById('splitSessionForm');
+    const blocksContainer = document.getElementById('splitSessionBlocks');
+    const summary = document.getElementById('splitSelectionSummary');
+    if (form) form.reset();
+    if (blocksContainer) blocksContainer.innerHTML = '';
+    if (summary) summary.textContent = 'Choose the blocks that belong to the second car.';
+    document.getElementById('splitOriginalVehicle').value = 'Kia EV5';
+    document.getElementById('splitNewVehicle').value = 'Peugeot E-2008';
+    setPillValue('splitOriginalVehicle', 'Kia EV5');
+    setPillValue('splitNewVehicle', 'Peugeot E-2008');
+}
+
+function updateSplitSelectionSummary() {
+    const summary = document.getElementById('splitSelectionSummary');
+    const session = allSessionsCache.find((entry) => entry.id === currentSplitSessionId);
+    if (!summary || !session) return;
+
+    const selectedKeys = new Set(
+        [...document.querySelectorAll('#splitSessionBlocks .split-block-checkbox:checked')].map((el) => el.value)
+    );
+    const blocks = Array.isArray(session.dispatchBlocks) ? session.dispatchBlocks : [];
+    const selectedBlocks = blocks.filter((block) => selectedKeys.has(getDispatchBlockKey(block)));
+    const remainingBlocks = blocks.filter((block) => !selectedKeys.has(getDispatchBlockKey(block)));
+    const selectedEnergy = selectedBlocks.reduce((sum, block) => sum + getDispatchBlockEnergy(block), 0);
+    const remainingEnergy = remainingBlocks.reduce((sum, block) => sum + getDispatchBlockEnergy(block), 0);
+
+    if (!selectedBlocks.length) {
+        summary.textContent = 'Choose at least one dispatch block to move into the new session.';
+        return;
+    }
+
+    if (!remainingBlocks.length) {
+        summary.textContent = `Selected ${selectedBlocks.length} block(s), ${selectedEnergy.toFixed(2)}kWh. Leave at least one block on the original session.`;
+        return;
+    }
+
+    summary.textContent = `Move ${selectedBlocks.length} block(s), ${selectedEnergy.toFixed(2)}kWh, into the new session. ${remainingBlocks.length} block(s), ${remainingEnergy.toFixed(2)}kWh, will stay on the original session.`;
+}
+
+function setupSplitSessionForm() {
+    const form = document.getElementById('splitSessionForm');
+    if (!form) return;
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await submitSplitSession();
+    });
+}
+
+async function submitSplitSession() {
+    if (!currentSplitSessionId) {
+        alert('No session selected.');
+        return;
+    }
+
+    const selectedBlockKeys = [...document.querySelectorAll('#splitSessionBlocks .split-block-checkbox:checked')]
+        .map((el) => el.value);
+
+    if (!selectedBlockKeys.length) {
+        alert('Select at least one dispatch block to move.');
+        return;
+    }
+
+    const originalVehicle = document.getElementById('splitOriginalVehicle').value;
+    const newVehicle = document.getElementById('splitNewVehicle').value;
+
+    if (!newVehicle) {
+        alert('Choose a vehicle for the new session.');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/sessions/${currentSplitSessionId}/split`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                selectedBlockKeys,
+                originalVehicle,
+                newVehicle
+            })
+        });
+
+        const data = await parseApiJson(response, 'split session');
+        if (!response.ok) {
+            throw new Error(data?.error || 'Failed to split session');
+        }
+
+        document.getElementById('splitSessionModal').style.display = 'none';
+        document.body.style.overflow = 'auto';
+        resetSplitSessionModal();
+        await loadSessions(currentFilter, { force: true });
+        await loadStats(currentFilter);
+    } catch (error) {
+        console.error('Error splitting session:', error);
+        alert(error.message || 'Failed to split session');
+    }
 }
 
 // Add a new session
@@ -922,6 +1130,9 @@ function setupModals() {
         if (modal.id === 'tariffModal') {
             document.getElementById('tariffForm').reset();
             setDefaultDate();
+        }
+        if (modal.id === 'splitSessionModal') {
+            resetSplitSessionModal();
         }
     }
     
